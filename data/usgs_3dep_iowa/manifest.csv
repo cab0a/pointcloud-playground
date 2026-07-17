@@ -1,0 +1,13 @@
+field,value
+source_url,https://s3-us-west-2.amazonaws.com/usgs-lidar-public/IA_FullState/ept-data/10-437-477-512.laz
+source_sha256,2b7c3e9317973a426bbe325def55dc74afa09dc33e13f87db7038c2125dd2517
+source_points,66637
+filter,ASPRS classification 2 (ground)
+filtered_points,65692
+sample_method,random without replacement
+sample_size,5000
+random_seed,42
+offset_x,-10449126.900000
+offset_y,5130429.220000
+offset_z,288.130000
+sample_sha256,b97f9f06037e7c743c0ad7cc8a095422e9b3683cd4fb6f1dcfded6123fc08d26
