@@ -1,8 +1,9 @@
 """Deterministic synthetic point clouds for controlled experiments."""
 
 import numpy as np
+from numpy.typing import NDArray
 
-from .io import PointCloud
+from .io import PointCloud, validate_points
 
 
 def generate_controlled_density_cloud(
@@ -29,3 +30,14 @@ def generate_controlled_density_cloud(
         + rng.normal(0.0, 0.02, size=point_count)
     )
     return np.column_stack((xy, z))
+
+
+def controlled_surface_normals(
+    points: NDArray[np.floating],
+) -> NDArray[np.float64]:
+    """Return analytic upward normals for the noise-free wavy surface."""
+    array = validate_points(points)
+    dz_dx = 0.21 * np.cos(0.6 * array[:, 0])
+    dz_dy = -0.1125 * np.sin(0.45 * array[:, 1])
+    normals = np.column_stack((-dz_dx, -dz_dy, np.ones(len(array))))
+    return normals / np.linalg.norm(normals, axis=1, keepdims=True)

@@ -13,6 +13,7 @@ from numpy.typing import NDArray
 from .evaluation import EvaluationResult
 from .filtering_evaluation import FilteringResult
 from .io import validate_points
+from .normal_evaluation import NormalEvaluationResult
 from .outliers import OutlierMask
 
 
@@ -196,6 +197,150 @@ def save_outlier_filtering_plot(
         axis.set(xlabel="X", ylabel="Y", zlabel="Z")
         axis.set_box_aspect(box_aspect)
         axis.view_init(elev=24, azim=-60)
+
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=170)
+    plt.close(figure)
+    return output_path
+
+
+def save_normal_evaluation_plot(
+    path: str | Path,
+    points: NDArray[np.floating],
+    results: list[NormalEvaluationResult],
+    plot_limit: int = 220,
+) -> Path:
+    """Save normal vectors and neighborhood-selection metrics."""
+    cloud = validate_points(points)
+    if not results:
+        raise ValueError("At least one normal-estimation result is required.")
+
+    display_result = results[len(results) // 2]
+    sample_count = min(len(cloud), plot_limit)
+    sample_indices = np.linspace(
+        0,
+        len(cloud) - 1,
+        sample_count,
+        dtype=int,
+    )
+    sample = cloud[sample_indices]
+    sample_normals = display_result.normals[sample_indices]
+    vector_length = max(
+        display_result.median_neighborhood_radius * 0.35,
+        np.finfo(np.float64).eps,
+    )
+
+    figure = plt.figure(figsize=(15, 4.8), constrained_layout=True)
+    normal_axis = figure.add_subplot(1, 3, 1, projection="3d")
+    error_axis = figure.add_subplot(1, 3, 2)
+    scale_axis = figure.add_subplot(1, 3, 3)
+
+    normal_axis.scatter(
+        sample[:, 0],
+        sample[:, 1],
+        sample[:, 2],
+        c=sample[:, 2],
+        cmap="viridis",
+        s=5,
+        linewidths=0,
+    )
+    normal_axis.quiver(
+        sample[:, 0],
+        sample[:, 1],
+        sample[:, 2],
+        sample_normals[:, 0],
+        sample_normals[:, 1],
+        sample_normals[:, 2],
+        length=vector_length,
+        normalize=True,
+        color="#d62728",
+        linewidth=0.55,
+    )
+    normal_axis.set_title(
+        f"Estimated normals\nk={display_result.neighbors}"
+    )
+    normal_axis.set(xlabel="X", ylabel="Y", zlabel="Z")
+    spans = np.ptp(cloud, axis=0)
+    box_aspect = np.maximum(spans / max(float(spans.max()), 1.0), 0.25)
+    normal_axis.set_box_aspect(box_aspect)
+    normal_axis.view_init(elev=28, azim=-60)
+
+    neighborhoods = [result.neighbors for result in results]
+    error_axis.plot(
+        neighborhoods,
+        [result.mean_repeatability_error_deg for result in results],
+        marker="o",
+        label="Mean perturbation error",
+    )
+    error_axis.plot(
+        neighborhoods,
+        [result.p95_repeatability_error_deg for result in results],
+        marker="o",
+        linestyle="--",
+        label="P95 perturbation error",
+    )
+    if results[0].mean_angular_error_deg is not None:
+        error_axis.plot(
+            neighborhoods,
+            [result.mean_angular_error_deg for result in results],
+            marker="s",
+            label="Mean reference error",
+        )
+        error_axis.plot(
+            neighborhoods,
+            [result.p95_angular_error_deg for result in results],
+            marker="s",
+            linestyle="--",
+            label="P95 reference error",
+        )
+    error_axis.set(
+        title="Angular error",
+        xlabel="Neighbors (k)",
+        ylabel="Degrees",
+        xticks=neighborhoods,
+    )
+    error_axis.grid(alpha=0.25)
+    error_axis.legend(fontsize=8)
+
+    scale_axis.plot(
+        neighborhoods,
+        [result.median_neighborhood_radius for result in results],
+        color="#1f77b4",
+        marker="o",
+        label="Median radius",
+    )
+    scale_axis.set(
+        title="Support scale and surface variation",
+        xlabel="Neighbors (k)",
+        ylabel="Median neighborhood radius",
+        xticks=neighborhoods,
+    )
+    scale_axis.tick_params(axis="y", labelcolor="#1f77b4")
+    scale_axis.grid(alpha=0.25)
+
+    variation_axis = scale_axis.twinx()
+    variation_axis.plot(
+        neighborhoods,
+        [result.mean_surface_variation for result in results],
+        color="#ff7f0e",
+        marker="s",
+        label="Mean surface variation",
+    )
+    variation_axis.set_ylabel(
+        "Mean surface variation",
+        color="#ff7f0e",
+    )
+    variation_axis.tick_params(axis="y", labelcolor="#ff7f0e")
+
+    handles, labels = scale_axis.get_legend_handles_labels()
+    second_handles, second_labels = variation_axis.get_legend_handles_labels()
+    scale_axis.legend(
+        handles + second_handles,
+        labels + second_labels,
+        fontsize=8,
+        loc="best",
+    )
 
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)

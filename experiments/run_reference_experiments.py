@@ -12,10 +12,18 @@ from pointcloud_playground.filtering_evaluation import (
     write_filtering_metrics_csv,
 )
 from pointcloud_playground.io import load_xyz, save_xyz
+from pointcloud_playground.normal_evaluation import (
+    evaluate_normal_neighborhoods,
+    write_normal_metrics_csv,
+)
 from pointcloud_playground.outliers import inject_vertical_outliers
-from pointcloud_playground.synthetic import generate_controlled_density_cloud
+from pointcloud_playground.synthetic import (
+    controlled_surface_normals,
+    generate_controlled_density_cloud,
+)
 from pointcloud_playground.visualization import (
     save_comparison_plot,
+    save_normal_evaluation_plot,
     save_outlier_filtering_plot,
 )
 
@@ -61,6 +69,29 @@ def run_outlier_experiment(
     )
 
 
+def run_normal_experiment(
+    input_path: Path,
+    output_dir: Path,
+    reference_normals: bool,
+) -> None:
+    """Run one normal-estimation neighborhood evaluation."""
+    points = load_xyz(input_path)
+    truth = controlled_surface_normals(points) if reference_normals else None
+    results = evaluate_normal_neighborhoods(
+        points,
+        [8, 16, 32, 64],
+        reference_normals=truth,
+        noise_scale=0.05,
+        seed=42,
+    )
+    write_normal_metrics_csv(output_dir / "metrics.csv", results)
+    save_normal_evaluation_plot(
+        output_dir / "comparison.png",
+        points,
+        results,
+    )
+
+
 def main() -> None:
     """Generate all versioned reference experiments."""
     synthetic_path = ROOT / "data" / "synthetic_controlled_density.xyz"
@@ -84,6 +115,16 @@ def main() -> None:
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
         ROOT / "results" / "outlier_filtering" / "usgs_3dep_iowa",
         seed=42,
+    )
+    run_normal_experiment(
+        synthetic_path,
+        ROOT / "results" / "normal_estimation" / "synthetic",
+        reference_normals=True,
+    )
+    run_normal_experiment(
+        ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
+        ROOT / "results" / "normal_estimation" / "usgs_3dep_iowa",
+        reference_normals=False,
     )
 
 

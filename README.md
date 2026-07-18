@@ -3,12 +3,22 @@
 Reproducible point-cloud experiments that connect method selection,
 implementation, quantitative evaluation, and documented interpretation.
 
-Version 0.2.0 evaluates statistical outlier filtering under controlled noise.
-It extends the voxel-downsampling study from v0.1.0 and applies both
-experiments to a deterministic synthetic surface and a traceable public USGS
-3DEP lidar sample.
+Version 0.3.0 evaluates PCA normal estimation across neighborhood sizes. It
+extends the outlier-filtering study from v0.2.0 and the voxel-downsampling
+study from v0.1.0. Every experiment uses a deterministic synthetic surface and
+a traceable public USGS 3DEP lidar sample.
 
 ## Research Questions
+
+### Normal estimation
+
+How does neighborhood size affect the accuracy, perturbation stability, and
+spatial support of PCA-estimated point-cloud normals?
+
+The working hypothesis is that larger neighborhoods will reduce sensitivity
+to coordinate noise, while also increasing the spatial scale over which local
+geometry is approximated. The most stable setting is therefore not
+automatically the most appropriate setting for preserving local detail.
 
 ### Outlier filtering
 
@@ -31,6 +41,10 @@ points and their nearest retained representation.
 
 ## Features
 
+- Batched local PCA normal estimation across configurable neighborhood sizes
+- Analytic normal ground truth for the controlled synthetic surface
+- Sign-invariant angular accuracy and perturbation-repeatability metrics
+- Neighborhood-radius and surface-variation diagnostics
 - Deterministic injection of labeled vertical outliers
 - Mean k-nearest-neighbor statistical filtering using SciPy
 - Precision, recall, F1, inlier-retention, and coverage measurements
@@ -51,23 +65,19 @@ cd pointcloud-playground
 python -m pip install -e .
 
 pointcloud-playground generate-demo demo.xyz
-pointcloud-playground evaluate-outliers demo.xyz \
-  --output-dir output/outliers
+pointcloud-playground evaluate-normals demo.xyz \
+  --output-dir output/normals
 ```
 
-The outlier evaluation writes:
+The normal evaluation writes:
 
 ```text
-output/outliers/
+output/normals/
 ├── comparison.png
-├── contaminated.xyz
-├── filtered_std_0p5.xyz
-├── filtered_std_1.xyz
-├── filtered_std_1p5.xyz
-├── filtered_std_2.xyz
-├── filtered_std_2p5.xyz
-├── filtered_std_3.xyz
-├── labels.csv
+├── normals_k8.csv
+├── normals_k16.csv
+├── normals_k32.csv
+├── normals_k64.csv
 └── metrics.csv
 ```
 
@@ -77,6 +87,16 @@ Generate a repeatable synthetic surface with uneven point density:
 
 ```bash
 pointcloud-playground generate-demo demo.xyz --points 6000 --seed 42
+```
+
+Evaluate PCA normals under a controlled coordinate perturbation:
+
+```bash
+pointcloud-playground evaluate-normals demo.xyz \
+  --neighbors 8 16 32 64 \
+  --noise-scale 0.05 \
+  --seed 42 \
+  --output-dir output/normals
 ```
 
 Inject 5% labeled outliers and evaluate a sweep of statistical thresholds:
@@ -122,6 +142,36 @@ python experiments/prepare_public_sample.py
 
 ## Methodology
 
+### PCA normal estimation
+
+For each point, the `k` nearest other points define a local neighborhood. The
+neighborhood is centered, its 3-by-3 covariance matrix is computed, and the
+eigenvector associated with the smallest eigenvalue is used as the local
+normal. Normal signs are oriented toward positive Z for consistent terrain
+visualization.
+
+The synthetic surface has analytic reference normals derived from its
+noise-free height function. Accuracy is measured by the sign-invariant angle
+between the estimate and reference:
+
+```text
+angular error = arccos(|estimated normal · reference normal|)
+```
+
+For both datasets, deterministic isotropic Gaussian noise is added with a
+standard deviation of 5% of the input's median nearest-neighbor spacing.
+Normals are re-estimated after perturbation, and their angular change measures
+repeatability. The same perturbed cloud is used for every neighborhood size.
+
+Surface variation is reported as:
+
+```text
+smallest covariance eigenvalue / sum of covariance eigenvalues
+```
+
+It describes local non-planarity under the selected support and is not a
+standalone accuracy score.
+
 ### Controlled outlier injection
 
 The clean point cloud is treated as reference geometry. Synthetic outliers are
@@ -160,6 +210,10 @@ occupied voxel is represented by the centroid of its points.
 
 | Metric | Definition | Interpretation |
 | --- | --- | --- |
+| Reference angular error | Sign-invariant angle to an analytic reference normal | Accuracy on the controlled synthetic surface |
+| Repeatability error | Angle between normals before and after controlled perturbation | Sensitivity to small coordinate changes |
+| Neighborhood radius | Distance to the kth nearest point | Spatial support of the local estimate |
+| Surface variation | Smallest covariance eigenvalue / eigenvalue sum | Local non-planarity at the selected support |
 | Precision | Correct removals / all removals | Reliability of an outlier decision |
 | Recall | Correct removals / all true outliers | Fraction of injected outliers detected |
 | F1 | Harmonic mean of precision and recall | Balanced detection score |
@@ -172,6 +226,51 @@ occupied voxel is represented by the centroid of its points.
 All coordinates and distances use the units of the input XYZ file.
 
 ## Evaluation
+
+### Normal estimation: synthetic surface
+
+The input contains 6,000 unevenly sampled points with 0.02-unit Z noise. Its
+analytic reference normals come from the underlying noise-free height
+function. The controlled perturbation standard deviation is 0.00535 units.
+
+| Neighbors | Median radius | Mean reference error | P95 reference error | Median repeatability error | P95 repeatability error |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 8 | 0.407 | 3.815° | 9.882° | 0.880° | 4.675° |
+| 16 | 0.605 | 1.744° | 4.347° | 0.413° | 1.829° |
+| 32 | 0.892 | 0.982° | **2.302°** | 0.208° | 0.792° |
+| 64 | 1.296 | **0.846°** | 2.417° | **0.111°** | **0.380°** |
+
+![Normal-estimation evaluation on the synthetic surface](results/normal_estimation/synthetic/comparison.png)
+
+Increasing the neighborhood size substantially improves mean accuracy and
+perturbation repeatability. However, the P95 reference error is lowest at
+`k=32` and rises slightly at `k=64`, while the median support radius grows to
+1.296 units. This tail behavior is consistent with the expected trade-off:
+broader support suppresses noise but can mix geometry across a curved,
+unevenly sampled surface.
+
+### Normal estimation: public USGS 3DEP sample
+
+The public sample contains 5,000 ground-classified points. It has no
+independent normal labels, so this experiment reports perturbation
+repeatability and neighborhood diagnostics without claiming reference
+accuracy. The controlled perturbation standard deviation is 0.246 input
+units.
+
+| Neighbors | Median radius | Mean repeatability error | Median repeatability error | P95 repeatability error | Mean surface variation |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 8 | 15.788 | 0.955° | 0.830° | 2.121° | 4.50e-5 |
+| 16 | 22.576 | 0.423° | 0.389° | 0.859° | 3.86e-5 |
+| 32 | 32.155 | 0.203° | 0.186° | 0.402° | 2.83e-5 |
+| 64 | 45.631 | 0.099° | 0.091° | 0.202° | 2.14e-5 |
+
+![Normal-estimation evaluation on the USGS 3DEP sample](results/normal_estimation/usgs_3dep_iowa/comparison.png)
+
+Repeatability improves monotonically with neighborhood size, but the median
+support radius nearly triples. Without ground truth, the lower angular change
+at `k=64` cannot establish higher accuracy: it may also reflect smoothing over
+local terrain structure. Neighborhood selection therefore requires a spatial
+detail requirement in addition to a stability target.
 
 ### Controlled outliers: synthetic surface
 
@@ -256,6 +355,7 @@ pointcloud-playground/
 ├── data/                         # Versioned synthetic and public samples
 ├── experiments/                  # Sample preparation and reference runs
 ├── results/
+│   ├── normal_estimation/        # v0.3 metrics and figures
 │   ├── outlier_filtering/        # v0.2 metrics and figures
 │   ├── synthetic/                # v0.1 synthetic results
 │   └── usgs_3dep_iowa/           # v0.1 public-data results
@@ -265,6 +365,8 @@ pointcloud-playground/
 │   ├── evaluation.py
 │   ├── filtering_evaluation.py
 │   ├── io.py
+│   ├── normal_evaluation.py
+│   ├── normals.py
 │   ├── outliers.py
 │   ├── synthetic.py
 │   └── visualization.py
@@ -276,6 +378,18 @@ pointcloud-playground/
 
 ## Limitations
 
+- Local PCA assumes that a neighborhood is adequately approximated by a plane.
+  Curvature, boundaries, mixed surfaces, and non-uniform density can bias the
+  estimate.
+- Positive-Z orientation is suitable for these height-field and terrain
+  experiments, but not for vertical, enclosed, or arbitrarily oriented
+  surfaces that require a separate orientation strategy.
+- The public sample has no reference normals. Perturbation repeatability is a
+  stability measurement and must not be interpreted as accuracy.
+- The controlled perturbation is isotropic Gaussian noise and does not model
+  a specific lidar sensor or acquisition geometry.
+- Surface variation depends on neighborhood scale and sampling distribution;
+  lower values do not universally mean better normals.
 - Injected noise is limited to isolated points above or below the reference
   cloud. It does not model clustered noise, multipath returns, or near-surface
   sensor artifacts.
@@ -297,7 +411,6 @@ pointcloud-playground/
 
 ## Roadmap
 
-- **v0.3:** Normal-estimation reliability and neighborhood selection
 - **v0.4:** Rigid registration with measurable perturbations
 - **v0.5:** Cross-experiment summaries and interface review
 

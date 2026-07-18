@@ -18,4 +18,10 @@ The `outlier_filtering` directories contain:
   every statistical threshold
 - `comparison.png`: ground truth, predicted removals, and the best-F1 output
 
+The `normal_estimation` directories contain:
+
+- `metrics.csv`: accuracy, perturbation repeatability, support radius, and
+  surface-variation measurements across neighborhood sizes
+- `comparison.png`: sampled normal vectors and neighborhood-selection curves
+
 Interpretation is documented in the main project README.

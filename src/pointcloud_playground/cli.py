@@ -19,9 +19,18 @@ from .filtering_evaluation import (
     write_outlier_labels_csv,
 )
 from .io import load_xyz, save_xyz
+from .normal_evaluation import (
+    evaluate_normal_neighborhoods,
+    write_normal_estimates,
+    write_normal_metrics_csv,
+)
 from .outliers import inject_vertical_outliers
 from .synthetic import generate_controlled_density_cloud
-from .visualization import save_comparison_plot, save_outlier_filtering_plot
+from .visualization import (
+    save_comparison_plot,
+    save_normal_evaluation_plot,
+    save_outlier_filtering_plot,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -100,6 +109,38 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("output/outliers"),
         help="Directory for metrics, point clouds, labels, and the figure.",
+    )
+
+    normal_parser = subparsers.add_parser(
+        "evaluate-normals",
+        help="Evaluate PCA normal stability across neighborhood sizes.",
+    )
+    normal_parser.add_argument("input", type=Path)
+    normal_parser.add_argument(
+        "--neighbors",
+        type=int,
+        nargs="+",
+        default=[8, 16, 32, 64],
+        metavar="K",
+        help="Neighborhood sizes evaluated by local PCA.",
+    )
+    normal_parser.add_argument(
+        "--noise-scale",
+        type=float,
+        default=0.05,
+        help="Perturbation standard deviation relative to median spacing.",
+    )
+    normal_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for controlled coordinate perturbation.",
+    )
+    normal_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/normals"),
+        help="Directory for metrics, point-level normals, and the figure.",
     )
     return parser
 
@@ -180,6 +221,37 @@ def _evaluate_outliers(args: argparse.Namespace) -> int:
     return 0
 
 
+def _evaluate_normals(args: argparse.Namespace) -> int:
+    points = load_xyz(args.input)
+    results = evaluate_normal_neighborhoods(
+        points,
+        args.neighbors,
+        noise_scale=args.noise_scale,
+        seed=args.seed,
+    )
+    metrics_path = write_normal_metrics_csv(
+        args.output_dir / "metrics.csv",
+        results,
+    )
+    write_normal_estimates(args.output_dir, points, results)
+    comparison_path = save_normal_evaluation_plot(
+        args.output_dir / "comparison.png",
+        points,
+        results,
+    )
+
+    print(f"Input points: {len(points)}")
+    for result in results:
+        print(
+            f"Neighborhood {result.neighbors}: "
+            f"median repeatability error "
+            f"{result.median_repeatability_error_deg:.3f} deg"
+        )
+    print(f"Metrics: {metrics_path}")
+    print(f"Comparison: {comparison_path}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command-line interface."""
     parser = build_parser()
@@ -189,7 +261,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _generate_demo(args)
         if args.command == "evaluate":
             return _evaluate(args)
-        return _evaluate_outliers(args)
+        if args.command == "evaluate-outliers":
+            return _evaluate_outliers(args)
+        return _evaluate_normals(args)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     return 2

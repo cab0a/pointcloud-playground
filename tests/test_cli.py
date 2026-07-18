@@ -54,3 +54,29 @@ def test_cli_generates_outlier_filtering_outputs(tmp_path: Path) -> None:
     assert (output_dir / "metrics.csv").is_file()
     assert (output_dir / "comparison.png").is_file()
     assert (output_dir / "filtered_std_1.xyz").is_file()
+
+
+def test_cli_generates_normal_evaluation_outputs(tmp_path: Path) -> None:
+    input_path = tmp_path / "demo.xyz"
+    output_dir = tmp_path / "normals"
+    assert main(["generate-demo", str(input_path), "--points", "300"]) == 0
+
+    result = main(
+        [
+            "evaluate-normals",
+            str(input_path),
+            "--neighbors",
+            "8",
+            "16",
+            "--noise-scale",
+            "0.05",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert result == 0
+    assert (output_dir / "metrics.csv").is_file()
+    assert (output_dir / "comparison.png").is_file()
+    assert (output_dir / "normals_k8.csv").is_file()
+    assert (output_dir / "normals_k16.csv").is_file()
