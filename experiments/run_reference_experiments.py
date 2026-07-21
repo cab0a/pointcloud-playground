@@ -12,6 +12,10 @@ from pointcloud_playground.filtering_evaluation import (
     write_filtering_metrics_csv,
 )
 from pointcloud_playground.io import load_xyz, save_xyz
+from pointcloud_playground.joint_evaluation import (
+    evaluate_joint_sensitivity,
+    write_joint_sensitivity_metrics_csv,
+)
 from pointcloud_playground.normal_evaluation import (
     evaluate_normal_neighborhoods,
     write_normal_metrics_csv,
@@ -41,6 +45,7 @@ from pointcloud_playground.trim_evaluation import (
 from pointcloud_playground.visualization import (
     save_comparison_plot,
     save_experiment_summary_plot,
+    save_joint_sensitivity_plot,
     save_normal_evaluation_plot,
     save_outlier_filtering_plot,
     save_partial_overlap_evaluation_plot,
@@ -175,6 +180,28 @@ def run_trim_sensitivity_experiment(
     save_trim_sensitivity_plot(output_dir / "comparison.png", results)
 
 
+def run_joint_sensitivity_experiment(
+    input_path: Path,
+    output_dir: Path,
+) -> None:
+    """Run one joint overlap and source-outlier sensitivity evaluation."""
+    points = load_xyz(input_path)
+    results = evaluate_joint_sensitivity(
+        points,
+        [1.0, 0.8, 0.6, 0.4],
+        [0.0, 0.02, 0.05, 0.1],
+        [0.7, 0.4],
+        angle_deg=2.0,
+        translation_scale=0.5,
+        distance_scale=0.25,
+        seed=42,
+        max_iterations=80,
+        tolerance_scale=1e-6,
+    )
+    write_joint_sensitivity_metrics_csv(output_dir / "metrics.csv", results)
+    save_joint_sensitivity_plot(output_dir / "comparison.png", results)
+
+
 def main() -> None:
     """Generate all versioned reference experiments."""
     synthetic_path = ROOT / "data" / "synthetic_controlled_density.xyz"
@@ -237,6 +264,14 @@ def main() -> None:
     run_trim_sensitivity_experiment(
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
         ROOT / "results" / "trim_sensitivity" / "usgs_3dep_iowa",
+    )
+    run_joint_sensitivity_experiment(
+        synthetic_path,
+        ROOT / "results" / "joint_sensitivity" / "synthetic",
+    )
+    run_joint_sensitivity_experiment(
+        ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
+        ROOT / "results" / "joint_sensitivity" / "usgs_3dep_iowa",
     )
     summaries = collect_experiment_summaries(ROOT / "results")
     summary_dir = ROOT / "results" / "summary"

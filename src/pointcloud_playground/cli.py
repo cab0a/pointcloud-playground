@@ -19,6 +19,10 @@ from .filtering_evaluation import (
     write_outlier_labels_csv,
 )
 from .io import load_xyz, save_xyz
+from .joint_evaluation import (
+    evaluate_joint_sensitivity,
+    write_joint_sensitivity_metrics_csv,
+)
 from .normal_evaluation import (
     evaluate_normal_neighborhoods,
     write_normal_estimates,
@@ -48,6 +52,7 @@ from .trim_evaluation import (
 from .visualization import (
     save_comparison_plot,
     save_experiment_summary_plot,
+    save_joint_sensitivity_plot,
     save_normal_evaluation_plot,
     save_outlier_filtering_plot,
     save_partial_overlap_evaluation_plot,
@@ -310,6 +315,78 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory for sensitivity metrics and the diagnostic figure.",
     )
 
+    joint_parser = subparsers.add_parser(
+        "evaluate-joint-sensitivity",
+        help="Evaluate partial overlap together with controlled source outliers.",
+    )
+    joint_parser.add_argument("input", type=Path)
+    joint_parser.add_argument(
+        "--overlap-ratios",
+        type=float,
+        nargs="+",
+        default=[1.0, 0.8, 0.6, 0.4],
+        metavar="RATIO",
+        help="Requested overlap ratios for paired left and right scans.",
+    )
+    joint_parser.add_argument(
+        "--outlier-fractions",
+        type=float,
+        nargs="+",
+        default=[0.0, 0.02, 0.05, 0.1],
+        metavar="FRACTION",
+        help="Requested final fractions of appended source outliers.",
+    )
+    joint_parser.add_argument(
+        "--trim-fractions",
+        type=float,
+        nargs="+",
+        default=[0.7, 0.4],
+        metavar="FRACTION",
+        help="Trimmed fractions to compare; all-pairs is always included.",
+    )
+    joint_parser.add_argument(
+        "--angle",
+        type=float,
+        default=2.0,
+        help="Initial source rotation in degrees.",
+    )
+    joint_parser.add_argument(
+        "--translation-scale",
+        type=float,
+        default=0.5,
+        help="Initial translation relative to median point spacing.",
+    )
+    joint_parser.add_argument(
+        "--distance-scale",
+        type=float,
+        default=0.25,
+        help="Outlier offset relative to a geometry-derived scale.",
+    )
+    joint_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for controlled source-outlier injection.",
+    )
+    joint_parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=80,
+        help="Maximum ICP iterations for each joint condition.",
+    )
+    joint_parser.add_argument(
+        "--tolerance-scale",
+        type=float,
+        default=1e-6,
+        help="Convergence tolerance relative to median point spacing.",
+    )
+    joint_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/joint_sensitivity"),
+        help="Directory for joint-sensitivity metrics and the figure.",
+    )
+
     summary_parser = subparsers.add_parser(
         "summarize-results",
         help="Create a cross-experiment review from canonical result files.",
@@ -539,6 +616,42 @@ def _evaluate_trim_sensitivity(args: argparse.Namespace) -> int:
     return 0
 
 
+def _evaluate_joint_sensitivity(args: argparse.Namespace) -> int:
+    points = load_xyz(args.input)
+    results = evaluate_joint_sensitivity(
+        points,
+        args.overlap_ratios,
+        args.outlier_fractions,
+        args.trim_fractions,
+        angle_deg=args.angle,
+        translation_scale=args.translation_scale,
+        distance_scale=args.distance_scale,
+        seed=args.seed,
+        max_iterations=args.max_iterations,
+        tolerance_scale=args.tolerance_scale,
+    )
+    metrics_path = write_joint_sensitivity_metrics_csv(
+        args.output_dir / "metrics.csv",
+        results,
+    )
+    comparison_path = save_joint_sensitivity_plot(
+        args.output_dir / "comparison.png",
+        results,
+    )
+
+    print(f"Input points: {len(points)}")
+    print(f"Conditions: {len(results)}")
+    for method in dict.fromkeys(result.method for result in results):
+        method_results = [
+            result for result in results if result.method == method
+        ]
+        recovered = sum(result.recovered for result in method_results)
+        print(f"{method}: recovered {recovered}/{len(method_results)}")
+    print(f"Metrics: {metrics_path}")
+    print(f"Comparison: {comparison_path}")
+    return 0
+
+
 def _summarize_results(args: argparse.Namespace) -> int:
     summaries = collect_experiment_summaries(args.results_root)
     csv_path = write_experiment_summary_csv(
@@ -581,6 +694,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _evaluate_partial_overlap(args)
         if args.command == "evaluate-trim-sensitivity":
             return _evaluate_trim_sensitivity(args)
+        if args.command == "evaluate-joint-sensitivity":
+            return _evaluate_joint_sensitivity(args)
         return _summarize_results(args)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))

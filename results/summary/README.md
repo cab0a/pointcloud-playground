@@ -21,6 +21,8 @@ and must not be combined into a single ranking.
 | `partial_overlap_registration` | `usgs_3dep_iowa` | 8 | `trim_fraction=0.7` | `trimmed_recovery_rate` = 50.0% | `all_pairs_recovery_rate` = 25.0% |
 | `trim_sensitivity` | `synthetic` | 28 | `trim_fraction=0.4` | `recovery_rate` = 100.0% | `mean_correct_match_precision` = 100.0% |
 | `trim_sensitivity` | `usgs_3dep_iowa` | 28 | `trim_fraction=0.4` | `recovery_rate` = 100.0% | `mean_correct_match_precision` = 100.0% |
+| `joint_sensitivity` | `synthetic` | 48 | `method=trim_0p4, fraction=0.4` | `recovery_rate` = 81.2% | `mean_correct_match_precision` = 98.7% |
+| `joint_sensitivity` | `usgs_3dep_iowa` | 48 | `method=trim_0p4, fraction=0.4` | `recovery_rate` = 81.2% | `mean_correct_match_precision` = 98.9% |
 
 ## Selection Rules and Evidence Scope
 
@@ -36,6 +38,8 @@ and must not be combined into a single ranking.
 - `partial_overlap_registration/usgs_3dep_iowa`: Compare a fixed trimmed fraction with all-pairs ICP across the same overlap sweep. Evidence scope: Known transform and known correspondences in the overlap. Source: `partial_overlap_registration/usgs_3dep_iowa/metrics.csv`.
 - `trim_sensitivity/synthetic`: Highest controlled recovery rate across the overlap sweep; ties retain more correspondences. Evidence scope: Known transform, overlap membership, and exact overlap pairs. Source: `trim_sensitivity/synthetic/metrics.csv`.
 - `trim_sensitivity/usgs_3dep_iowa`: Highest controlled recovery rate across the overlap sweep; ties retain more correspondences. Evidence scope: Known transform, overlap membership, and exact overlap pairs. Source: `trim_sensitivity/usgs_3dep_iowa/metrics.csv`.
+- `joint_sensitivity/synthetic`: Highest controlled recovery rate across the joint grid; ties retain more correspondences. Evidence scope: Known transform, overlap membership, exact pairs, and source-outlier labels. Source: `joint_sensitivity/synthetic/metrics.csv`.
+- `joint_sensitivity/usgs_3dep_iowa`: Highest controlled recovery rate across the joint grid; ties retain more correspondences. Evidence scope: Known transform, overlap membership, exact pairs, and source-outlier labels. Source: `joint_sensitivity/usgs_3dep_iowa/metrics.csv`.
 
 ## Interface Review
 

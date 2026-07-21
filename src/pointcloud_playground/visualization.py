@@ -14,6 +14,7 @@ from numpy.typing import NDArray
 from .evaluation import EvaluationResult
 from .filtering_evaluation import FilteringResult
 from .io import validate_points
+from .joint_evaluation import JointSensitivityResult
 from .normal_evaluation import NormalEvaluationResult
 from .outliers import OutlierMask
 from .overlap_evaluation import PartialOverlapEvaluationResult
@@ -61,6 +62,7 @@ def save_experiment_summary_plot(
         "registration",
         "partial_overlap_registration",
         "trim_sensitivity",
+        "joint_sensitivity",
     ]
     dataset_order = ["synthetic", "usgs_3dep_iowa"]
     experiment_titles = {
@@ -70,6 +72,7 @@ def save_experiment_summary_plot(
         "registration": "Rigid registration",
         "partial_overlap_registration": "Partial overlap",
         "trim_sensitivity": "Trim sensitivity",
+        "joint_sensitivity": "Overlap + outliers",
     }
     dataset_titles = {
         "synthetic": "Synthetic surface",
@@ -93,7 +96,7 @@ def save_experiment_summary_plot(
     figure, axes = plt.subplots(
         len(dataset_order),
         len(experiment_order),
-        figsize=(24, 7.2),
+        figsize=(28, 7.2),
         constrained_layout=True,
         squeeze=False,
     )
@@ -992,5 +995,159 @@ def save_trim_sensitivity_plot(
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output_path, dpi=170)
+    plt.close(figure)
+    return output_path
+
+
+def save_joint_sensitivity_plot(
+    path: str | Path,
+    results: list[JointSensitivityResult],
+) -> Path:
+    """Save recovery and exact-pair precision across the joint grid."""
+    if not results:
+        raise ValueError("At least one joint-sensitivity result is required.")
+
+    methods = list(dict.fromkeys(result.method for result in results))
+    overlaps = sorted(
+        {result.actual_overlap_ratio for result in results},
+        reverse=True,
+    )
+    outlier_fractions = sorted(
+        {result.requested_outlier_fraction for result in results}
+    )
+    lookup = {
+        (
+            result.method,
+            result.actual_overlap_ratio,
+            result.requested_outlier_fraction,
+        ): result
+        for result in results
+    }
+    if len(lookup) != len(methods) * len(overlaps) * len(outlier_fractions):
+        raise ValueError(
+            "Joint-sensitivity results must form a complete unique grid."
+        )
+
+    fractions_by_method = {
+        result.method: result.correspondence_fraction for result in results
+    }
+    titles = {"all_pairs": "All pairs"}
+    titles.update(
+        {
+            method: f"Trimmed: {fractions_by_method[method]:.0%}"
+            for method in methods
+            if method != "all_pairs"
+        }
+    )
+    figure, axes = plt.subplots(
+        2,
+        len(methods),
+        figsize=(5.2 * len(methods), 8.5),
+        constrained_layout=True,
+        squeeze=False,
+    )
+    figure.suptitle(
+        "Joint Sensitivity to Partial Overlap and Source Outliers",
+        fontsize=15,
+        fontweight="bold",
+    )
+
+    for column_index, method in enumerate(methods):
+        method_results = np.array(
+            [
+                [
+                    lookup[(method, overlap, fraction)]
+                    for fraction in outlier_fractions
+                ]
+                for overlap in overlaps
+            ],
+            dtype=object,
+        )
+        recovery = np.array(
+            [
+                [float(result.recovered) for result in row]
+                for row in method_results
+            ]
+        )
+        precision = np.array(
+            [
+                [result.correct_match_precision for result in row]
+                for row in method_results
+            ]
+        )
+
+        recovery_axis = axes[0, column_index]
+        recovery_axis.imshow(
+            recovery,
+            vmin=0.0,
+            vmax=1.0,
+            cmap="RdYlGn",
+            aspect="auto",
+        )
+        for row_index in range(len(overlaps)):
+            for fraction_index in range(len(outlier_fractions)):
+                recovered = bool(recovery[row_index, fraction_index])
+                recovery_axis.text(
+                    fraction_index,
+                    row_index,
+                    "Yes" if recovered else "No",
+                    ha="center",
+                    va="center",
+                    fontsize=9,
+                    color="black" if recovered else "white",
+                )
+        recovery_axis.set(
+            title=f"{titles[method]}\ncontrolled recovery",
+            xlabel="Injected source-outlier fraction",
+            ylabel="Actual scan overlap" if column_index == 0 else "",
+            xticks=np.arange(len(outlier_fractions)),
+            xticklabels=[f"{value:.0%}" for value in outlier_fractions],
+            yticks=np.arange(len(overlaps)),
+            yticklabels=[f"{value:.0%}" for value in overlaps],
+        )
+
+        precision_axis = axes[1, column_index]
+        image = precision_axis.imshow(
+            precision,
+            vmin=0.0,
+            vmax=1.0,
+            cmap="viridis",
+            aspect="auto",
+        )
+        for row_index in range(len(overlaps)):
+            for fraction_index in range(len(outlier_fractions)):
+                precision_axis.text(
+                    fraction_index,
+                    row_index,
+                    f"{precision[row_index, fraction_index]:.0%}",
+                    ha="center",
+                    va="center",
+                    fontsize=9,
+                    color=(
+                        "white"
+                        if precision[row_index, fraction_index] < 0.55
+                        else "black"
+                    ),
+                )
+        precision_axis.set(
+            title=f"{titles[method]}\nexact retained-pair precision",
+            xlabel="Injected source-outlier fraction",
+            ylabel="Actual scan overlap" if column_index == 0 else "",
+            xticks=np.arange(len(outlier_fractions)),
+            xticklabels=[f"{value:.0%}" for value in outlier_fractions],
+            yticks=np.arange(len(overlaps)),
+            yticklabels=[f"{value:.0%}" for value in overlaps],
+        )
+        figure.colorbar(
+            image,
+            ax=precision_axis,
+            label="Precision",
+            fraction=0.046,
+            pad=0.04,
+        )
+
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=180)
     plt.close(figure)
     return output_path

@@ -3,14 +3,26 @@
 Reproducible point-cloud experiments that connect method selection,
 implementation, quantitative evaluation, and documented interpretation.
 
-Version 0.7.0 adds trim-fraction sensitivity analysis and correspondence
-diagnostics. A fixed grid from 0.4 to 1.0 is evaluated across four controlled
-overlap levels, using exact overlap labels to measure which retained pairs can
-be valid and which nearest-neighbor matches are correct. Every experiment uses
-a deterministic synthetic surface and a traceable public USGS 3DEP lidar
-sample.
+Version 0.8.0 evaluates partial overlap and controlled source-outlier
+contamination together. Three correspondence policies are tested over a 4-by-4
+joint grid, with known transforms, exact overlap pairs, and injected-outlier
+labels separating numerical convergence from correct recovery. Every
+experiment uses a deterministic synthetic surface and a traceable public USGS
+3DEP lidar sample.
 
 ## Research Questions
+
+### Joint overlap and outlier sensitivity
+
+How do partial scan overlap and controlled source contamination interact, and
+when does a fixed retained-correspondence fraction exceed the proportion of
+source points that can have valid target matches?
+
+The working hypothesis is that trimming will reject isolated source outliers
+when enough true overlap remains. At the boundary where the trim fraction
+equals clean overlap, adding even a small number of source-only outliers is
+expected to make the retained fraction larger than the available valid-pair
+fraction and bias the transform estimate.
 
 ### Trim-fraction sensitivity
 
@@ -86,6 +98,11 @@ points and their nearest retained representation.
 
 ## Features
 
+- Joint 4-by-4 sweep of scan overlap and source-outlier contamination
+- All-pairs ICP compared with fixed 70% and 40% retained fractions
+- Stable source labels for overlap, clean non-overlap, and injected outliers
+- Effective valid-pair fraction and outlier-rejection diagnostics
+- Recovery and exact retained-pair precision heatmaps for each policy
 - Fixed 0.4-to-1.0 trim-fraction grid across four controlled overlap levels
 - Retained-source overlap ratio and overlap-source retention diagnostics
 - Exact nearest-neighbor match precision and recall from known overlap pairs
@@ -129,14 +146,14 @@ cd pointcloud-playground
 python -m pip install -e .
 
 pointcloud-playground generate-demo demo.xyz
-pointcloud-playground evaluate-trim-sensitivity demo.xyz \
-  --output-dir output/trim_sensitivity
+pointcloud-playground evaluate-joint-sensitivity demo.xyz \
+  --output-dir output/joint_sensitivity
 ```
 
 The sensitivity evaluation writes:
 
 ```text
-output/trim_sensitivity/
+output/joint_sensitivity/
 ├── comparison.png
 └── metrics.csv
 ```
@@ -154,6 +171,22 @@ Generate a repeatable synthetic surface with uneven point density:
 
 ```bash
 pointcloud-playground generate-demo demo.xyz --points 6000 --seed 42
+```
+
+Evaluate joint sensitivity to partial overlap and controlled source outliers:
+
+```bash
+pointcloud-playground evaluate-joint-sensitivity demo.xyz \
+  --overlap-ratios 1.0 0.8 0.6 0.4 \
+  --outlier-fractions 0.0 0.02 0.05 0.10 \
+  --trim-fractions 0.7 0.4 \
+  --angle 2 \
+  --translation-scale 0.5 \
+  --distance-scale 0.25 \
+  --seed 42 \
+  --max-iterations 80 \
+  --tolerance-scale 1e-6 \
+  --output-dir output/joint_sensitivity
 ```
 
 Evaluate trim-fraction sensitivity with known correspondence diagnostics:
@@ -246,7 +279,7 @@ python experiments/prepare_public_sample.py
 
 ### CLI and output contract
 
-All six evaluation commands take one positional XYZ input, accept
+All seven evaluation commands take one positional XYZ input, accept
 `--output-dir`, and write `metrics.csv` plus `comparison.png`. Method-specific
 point clouds, labels, or point-level estimates are additional outputs.
 
@@ -258,6 +291,7 @@ point clouds, labels, or point-level estimates are additional outputs.
 | Rigid registration | `evaluate-registration` | `output/registration` |
 | Partial-overlap registration | `evaluate-partial-overlap` | `output/partial_overlap_registration` |
 | Trim sensitivity | `evaluate-trim-sensitivity` | `output/trim_sensitivity` |
+| Joint sensitivity | `evaluate-joint-sensitivity` | `output/joint_sensitivity` |
 
 The earlier `evaluate` command remains available as an alias for
 `evaluate-downsampling`.
@@ -266,7 +300,7 @@ The earlier `evaluate` command remains available as an alias for
 
 ### Cross-experiment summary
 
-The summary reads the twelve committed `metrics.csv` files from six
+The summary reads the fourteen committed `metrics.csv` files from seven
 experiments and two datasets. Each row uses the same schema: experiment,
 dataset, number of evaluated conditions, selected condition, selection rule,
 primary evidence, secondary evidence, evidence scope, and source path.
@@ -282,10 +316,48 @@ One representative condition is selected per experiment and dataset:
 | Rigid registration | Fraction converged with known-pair RMSE no greater than 0.01 times median spacing |
 | Partial-overlap registration | Recovery rates for fixed 70% trimming and all-pairs ICP across the same overlap sweep |
 | Trim sensitivity | Highest recovery rate across the overlap sweep; ties retain more correspondences |
+| Joint sensitivity | Highest recovery rate across the overlap-contamination grid; ties retain more correspondences |
 
 The summary deliberately does not create a combined score. F1, angular error,
 coverage, and transform recovery describe different questions and cannot be
 ranked on a shared quality axis.
+
+### Joint sensitivity to overlap and source outliers
+
+The v0.8 experiment combines the partial-overlap construction with isolated
+vertical source outliers. It uses the same 2-degree rotation, half-spacing
+translation, 80-iteration budget, and recovery criterion as the v0.6 and v0.7
+registration experiments. The Cartesian product is:
+
+```text
+overlap ratios:           1.0, 0.8, 0.6, 0.4
+source-outlier fractions: 0.0, 0.02, 0.05, 0.10
+policies:                 all pairs, trim 0.7, trim 0.4
+```
+
+The requested outlier fraction describes the final source scan, subject to
+integer rounding. Outliers are sampled within the source XY footprint and
+placed above or below its Z range. For each overlap level, one deterministic
+pool is generated and smaller contamination conditions use prefixes of that
+pool. Outliers are appended rather than shuffled, preserving the generating
+indices of all clean source points.
+
+The controlled labels divide source points into true overlap, clean
+non-overlap, and injected outliers. The experiment therefore reports both scan
+overlap and the stricter fraction of the contaminated source that can have a
+valid target pair:
+
+```text
+effective valid-pair fraction = known overlap points / contaminated source points
+fraction-to-valid ratio = retained correspondence fraction / effective valid-pair fraction
+outlier rejection rate = rejected injected outliers / injected outliers
+```
+
+Exact-match precision still requires the retained nearest target to be the
+generating target index; simply retaining a source point from the overlap is
+not counted as a correct match. All three policies use identical data for each
+joint condition. The sweep is a controlled sensitivity study, not automatic
+contamination estimation or parameter selection.
 
 ### Trim-fraction sensitivity and correspondence diagnostics
 
@@ -453,11 +525,16 @@ occupied voxel is represented by the centroid of its points.
 | All-source nearest-neighbor RMSE | RMSE from every aligned source point to its nearest target point | Includes source-only regions with no correct target counterpart |
 | Recovery rate | Recovered cases / evaluated cases | Controlled success frequency under the stated sweep and criterion |
 | Retained-source overlap ratio | Retained pairs whose source belongs to the known overlap / retained pairs | Composition of the retained set before checking target identity |
+| Retained-source non-overlap ratio | Retained clean source-only points / retained pairs | Clean unmatched contribution to the retained set |
+| Retained-outlier ratio | Retained injected source outliers / retained pairs | Contaminated contribution to the retained set |
 | Overlap-source retention | Retained overlap sources / all known overlap sources | Fraction of potentially valid source points kept |
 | Correct-match precision | Retained exact overlap matches / retained pairs | Reliability of retained nearest-neighbor pairs |
 | Correct-match recall | Retained exact overlap matches / all known overlap pairs | Fraction of ground-truth pairs retained correctly |
 | Median retained residual | Median nearest-neighbor distance among retained pairs | Residual scale used by the trimmed objective |
 | Median rejected residual | Median nearest-neighbor distance among rejected pairs | Separation between retained and excluded pairs; undefined at fraction 1.0 |
+| Effective valid-pair fraction | Known overlap points / contaminated source points | Upper bound on source points with generating target pairs in the controlled joint experiment |
+| Fraction-to-valid ratio | Retained correspondence fraction / effective valid-pair fraction | Whether the policy must retain more pairs than can be valid under the labels |
+| Outlier rejection rate | Rejected injected outliers / all injected outliers | Exclusion of labeled contamination; undefined without injected outliers |
 | Normalized error | Error divided by median point spacing | Scale-relative comparison between datasets |
 | Reference angular error | Sign-invariant angle to an analytic reference normal | Accuracy on the controlled synthetic surface |
 | Repeatability error | Angle between normals before and after controlled perturbation | Sensitivity to small coordinate changes |
@@ -478,7 +555,7 @@ All coordinates and distances use the units of the input XYZ file.
 
 ### Cross-experiment evidence snapshot
 
-The v0.7 review contains twelve summary records. The table shows the selected
+The v0.8 review contains fourteen summary records. The table shows the selected
 review condition and its primary evidence; each row retains its own selection
 rule and evidence scope in
 [`results/summary/README.md`](results/summary/README.md).
@@ -491,6 +568,7 @@ rule and evidence scope in
 | Rigid registration | 3/4 recovered; largest angle 10° | 2/4 recovered; largest angle 5° |
 | Partial overlap | Trimmed 2/4 recovered; all-pairs 1/4 | Trimmed 2/4 recovered; all-pairs 1/4 |
 | Trim sensitivity | Fraction 0.4: 4/4 recovered; mean precision 100% | Fraction 0.4: 4/4 recovered; mean precision 100% |
+| Joint sensitivity | Fraction 0.4: 13/16 recovered; mean precision 98.7% | Fraction 0.4: 13/16 recovered; mean precision 98.9% |
 
 ![Cross-experiment evidence snapshot](results/summary/comparison.png)
 
@@ -502,8 +580,60 @@ spacing-relative offsets and iteration budget. The partial-overlap comparison
 shows the same recovery boundary on both reference datasets, but that does not
 establish a universal trim fraction. The sensitivity sweep makes that boundary
 visible and labels the selected 0.4 condition as an evaluation result rather
-than a production default. These observations remain method-specific evidence,
-not an overall dataset or algorithm ranking.
+than a production default. The joint experiment then shows why that boundary
+shifts after source outliers reduce the effective valid-pair fraction. These
+observations remain method-specific evidence, not an overall dataset or
+algorithm ranking.
+
+### Joint sensitivity: synthetic surface
+
+The 48-condition synthetic sweep shows a consistent interaction between
+partial overlap and source contamination. All-pairs ICP recovers only the
+uncontaminated full-overlap case. The 70% policy recovers every 100% and 80%
+overlap condition, while the 40% policy also recovers every 60% condition.
+
+| Policy | Recovered | 100% overlap | 80% overlap | 60% overlap | 40% overlap |
+| --- | ---: | :---: | :---: | :---: | :---: |
+| All pairs | 1/16 | Y--- | ---- | ---- | ---- |
+| Trim 70% | 8/16 | YYYY | YYYY | ---- | ---- |
+| Trim 40% | 13/16 | YYYY | YYYY | YYYY | Y--- |
+
+Within each overlap cell, the symbols follow 0%, 2%, 5%, and 10% requested
+outlier fractions from left to right.
+
+![Joint sensitivity on the synthetic surface](results/joint_sensitivity/synthetic/comparison.png)
+
+At 40% overlap, the effective valid-pair fraction falls from 40.0% without
+outliers to 39.2%, 38.0%, and 36.0% as contamination increases. A fixed 40%
+policy must then retain some points without valid target pairs. Exact-pair
+precision falls from 100% to 98.0%, 94.9%, and 87.0%; normalized known-overlap
+RMSE rises from below 0.001 to 0.016, 0.061, and 0.210. All injected outliers
+are rejected in these four conditions, so the remaining bias comes from the
+need to retain additional clean non-overlap pairs, not from direct inclusion
+of the isolated outliers.
+
+### Joint sensitivity: public USGS 3DEP sample
+
+The public sample produces the same recovery matrix across all 48 conditions.
+Its scale and sampling pattern differ from the synthetic surface, but the
+controlled labels expose the same valid-pair boundary.
+
+| 40%-trim condition at 40% overlap | 0% outliers | 2% outliers | 5% outliers | 10% outliers |
+| --- | ---: | ---: | ---: | ---: |
+| Effective valid-pair fraction | 40.0% | 39.2% | 38.0% | 36.0% |
+| Exact-pair precision | 100.0% | 98.0% | 95.0% | 89.9% |
+| Outlier rejection | N/A | 100.0% | 100.0% | 98.3% |
+| Known-overlap RMSE / spacing | <0.001 | 0.021 | 0.080 | 0.228 |
+| Recovered | Yes | No | No | No |
+
+![Joint sensitivity on the USGS 3DEP sample](results/joint_sensitivity/usgs_3dep_iowa/comparison.png)
+
+The result does not show that 40% trimming is generally preferable. It shows
+that under this controlled initialization, it retains enough valid pairs for
+more of the tested grid than 70% or all-pairs, while failing as soon as the
+available valid-pair fraction drops below its fixed retained fraction at the
+lowest overlap. Near-surface, clustered, or target-side contamination may
+produce a different boundary.
 
 ### Trim sensitivity: synthetic surface
 
@@ -763,7 +893,8 @@ pointcloud-playground/
 ├── data/                         # Versioned synthetic and public samples
 ├── experiments/                  # Sample preparation and reference runs
 ├── results/
-│   ├── summary/                  # v0.7 cross-experiment review
+│   ├── summary/                  # v0.8 cross-experiment review
+│   ├── joint_sensitivity/        # v0.8 metrics and figures
 │   ├── trim_sensitivity/         # v0.7 metrics and figures
 │   ├── partial_overlap_registration/ # v0.6 metrics and figures
 │   ├── registration/             # v0.4 metrics and figures
@@ -776,6 +907,7 @@ pointcloud-playground/
 │   ├── evaluation.py
 │   ├── filtering_evaluation.py
 │   ├── io.py
+│   ├── joint_evaluation.py
 │   ├── normal_evaluation.py
 │   ├── normals.py
 │   ├── outliers.py
@@ -802,6 +934,16 @@ pointcloud-playground/
   general.
 - The two datasets share an experiment protocol but not the same coordinate
   scale, sampling pattern, geometry, or ground-truth coverage.
+- The joint experiment contaminates only the source with isolated vertical
+  outliers. It does not evaluate target contamination, clustered noise,
+  near-surface artifacts, or sensor-specific error distributions.
+- Joint-condition labels and exact generating pairs are available only because
+  the experiment is controlled. Real registration pipelines must estimate
+  overlap and contamination without this ground truth.
+- The 4-by-4 joint grid, fixed initialization, and two trim fractions expose a
+  local sensitivity boundary rather than a general robustness guarantee.
+- Rejecting every labeled outlier is not sufficient for recovery when a fixed
+  policy still has to retain clean source points outside the overlap.
 - The v0.4 registration sweep uses complete, one-to-one transformed copies.
   Its recovery boundary measures initialization sensitivity under full overlap.
 - Partial overlap is simulated with X-ordered slabs from one cloud. It does not
@@ -868,8 +1010,8 @@ pointcloud-playground/
 
 ## Roadmap
 
-- **v0.8:** Joint sensitivity to partial overlap and controlled outlier
-  contamination
+- **v0.9:** Documentation, API, and reproducibility review
+- **v1.0:** Stable public portfolio release
 
 Each extension will keep the same pattern: define a question, control the
 input, implement the method, evaluate the result, and document limitations.

@@ -13,6 +13,7 @@ EXPERIMENTS = (
     "registration",
     "partial_overlap_registration",
     "trim_sensitivity",
+    "joint_sensitivity",
 )
 DATASETS = ("synthetic", "usgs_3dep_iowa")
 
@@ -269,6 +270,53 @@ def _summarize_trim_sensitivity(
     )
 
 
+def _summarize_joint_sensitivity(
+    rows: list[dict[str, str]], dataset: str
+) -> ExperimentSummary:
+    by_method: dict[tuple[str, float], list[dict[str, str]]] = {}
+    for row in rows:
+        key = (row.get("method", ""), _number(row, "correspondence_fraction"))
+        by_method.setdefault(key, []).append(row)
+    condition_counts = {len(method_rows) for method_rows in by_method.values()}
+    if len(condition_counts) != 1:
+        raise ValueError("Every joint method must use the same condition grid.")
+
+    def recovery_rate(method_rows: list[dict[str, str]]) -> float:
+        return sum(
+            row.get("recovered", "").lower() == "true"
+            for row in method_rows
+        ) / len(method_rows)
+
+    (selected_method, selected_fraction), selected_rows = max(
+        by_method.items(),
+        key=lambda item: (recovery_rate(item[1]), item[0][1]),
+    )
+    mean_precision = sum(
+        _number(row, "correct_match_precision") for row in selected_rows
+    ) / len(selected_rows)
+    return ExperimentSummary(
+        experiment="joint_sensitivity",
+        dataset=dataset,
+        conditions_evaluated=len(rows),
+        selected_condition=(
+            f"method={selected_method}, fraction={selected_fraction:g}"
+        ),
+        selection_rule=(
+            "Highest controlled recovery rate across the joint grid; "
+            "ties retain more correspondences"
+        ),
+        primary_metric="recovery_rate",
+        primary_value=recovery_rate(selected_rows),
+        secondary_metric="mean_correct_match_precision",
+        secondary_value=mean_precision,
+        evidence_scope=(
+            "Known transform, overlap membership, exact pairs, and source-"
+            "outlier labels"
+        ),
+        source_metrics=_metrics_source("joint_sensitivity", dataset),
+    )
+
+
 def collect_experiment_summaries(
     results_root: str | Path,
 ) -> list[ExperimentSummary]:
@@ -283,6 +331,7 @@ def collect_experiment_summaries(
             _summarize_partial_overlap_registration
         ),
         "trim_sensitivity": _summarize_trim_sensitivity,
+        "joint_sensitivity": _summarize_joint_sensitivity,
     }
     summaries: list[ExperimentSummary] = []
     for experiment in EXPERIMENTS:

@@ -14,6 +14,7 @@ def test_cli_uses_consistent_default_output_directories() -> None:
             "output/partial_overlap_registration"
         ),
         "evaluate-trim-sensitivity": Path("output/trim_sensitivity"),
+        "evaluate-joint-sensitivity": Path("output/joint_sensitivity"),
     }
 
     for command, expected in commands.items():
@@ -173,6 +174,35 @@ def test_cli_generates_trim_sensitivity_outputs(tmp_path: Path) -> None:
             "--trim-fractions",
             "0.4",
             "0.8",
+            "--max-iterations",
+            "40",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert result == 0
+    assert (output_dir / "metrics.csv").is_file()
+    assert (output_dir / "comparison.png").is_file()
+
+
+def test_cli_generates_joint_sensitivity_outputs(tmp_path: Path) -> None:
+    input_path = tmp_path / "demo.xyz"
+    output_dir = tmp_path / "joint_sensitivity"
+    assert main(["generate-demo", str(input_path), "--points", "300"]) == 0
+
+    result = main(
+        [
+            "evaluate-joint-sensitivity",
+            str(input_path),
+            "--overlap-ratios",
+            "0.8",
+            "--outlier-fractions",
+            "0.0",
+            "0.05",
+            "--trim-fractions",
+            "0.7",
+            "0.4",
             "--max-iterations",
             "40",
             "--output-dir",
