@@ -85,10 +85,10 @@ def evaluate_voxel_sizes(
     return results
 
 
-def write_metrics_csv(
+def write_downsampling_metrics_csv(
     path: str | Path, results: list[EvaluationResult]
 ) -> Path:
-    """Write evaluation metrics to CSV."""
+    """Write voxel-downsampling evaluation metrics to CSV."""
     if not results:
         raise ValueError("At least one evaluation result is required.")
 
@@ -104,6 +104,13 @@ def write_metrics_csv(
         writer.writeheader()
         writer.writerows(result.as_row() for result in results)
     return output_path
+
+
+def write_metrics_csv(
+    path: str | Path, results: list[EvaluationResult]
+) -> Path:
+    """Write metrics using the pre-v0.5 compatibility name."""
+    return write_downsampling_metrics_csv(path, results)
 
 
 def voxel_size_label(voxel_size: float) -> str:

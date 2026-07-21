@@ -9,7 +9,7 @@ import numpy as np
 from .evaluation import (
     evaluate_voxel_sizes,
     write_downsampled_clouds,
-    write_metrics_csv,
+    write_downsampling_metrics_csv,
 )
 from .filtering_evaluation import (
     evaluate_outlier_filter,
@@ -30,9 +30,15 @@ from .registration_evaluation import (
     write_aligned_clouds,
     write_registration_metrics_csv,
 )
+from .summary import (
+    collect_experiment_summaries,
+    write_experiment_summary_csv,
+    write_experiment_summary_markdown,
+)
 from .synthetic import generate_controlled_density_cloud
 from .visualization import (
     save_comparison_plot,
+    save_experiment_summary_plot,
     save_normal_evaluation_plot,
     save_outlier_filtering_plot,
     save_registration_evaluation_plot,
@@ -56,7 +62,8 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--seed", type=int, default=42)
 
     evaluate_parser = subparsers.add_parser(
-        "evaluate",
+        "evaluate-downsampling",
+        aliases=["evaluate"],
         help="Evaluate voxel downsampling for an XYZ point cloud.",
     )
     evaluate_parser.add_argument("input", type=Path)
@@ -70,7 +77,8 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("output"),
+        default=Path("output/voxel_downsampling"),
+        help="Directory for metrics, downsampled clouds, and the figure.",
     )
 
     outlier_parser = subparsers.add_parser(
@@ -113,7 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
     outlier_parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("output/outliers"),
+        default=Path("output/outlier_filtering"),
         help="Directory for metrics, point clouds, labels, and the figure.",
     )
 
@@ -145,7 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     normal_parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("output/normals"),
+        default=Path("output/normal_estimation"),
         help="Directory for metrics, point-level normals, and the figure.",
     )
 
@@ -188,6 +196,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("output/registration"),
         help="Directory for metrics, aligned clouds, and the figure.",
     )
+
+    summary_parser = subparsers.add_parser(
+        "summarize-results",
+        help="Create a cross-experiment review from canonical result files.",
+    )
+    summary_parser.add_argument(
+        "results_root",
+        type=Path,
+        help="Root containing <experiment>/<dataset>/metrics.csv files.",
+    )
+    summary_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/summary"),
+        help="Directory for the summary CSV, Markdown, and figure.",
+    )
     return parser
 
 
@@ -202,7 +226,10 @@ def _generate_demo(args: argparse.Namespace) -> int:
 def _evaluate(args: argparse.Namespace) -> int:
     points = load_xyz(args.input)
     results = evaluate_voxel_sizes(points, args.voxel_sizes)
-    metrics_path = write_metrics_csv(args.output_dir / "metrics.csv", results)
+    metrics_path = write_downsampling_metrics_csv(
+        args.output_dir / "metrics.csv",
+        results,
+    )
     comparison_path = save_comparison_plot(
         args.output_dir / "comparison.png",
         points,
@@ -330,6 +357,29 @@ def _evaluate_registration(args: argparse.Namespace) -> int:
     return 0
 
 
+def _summarize_results(args: argparse.Namespace) -> int:
+    summaries = collect_experiment_summaries(args.results_root)
+    csv_path = write_experiment_summary_csv(
+        args.output_dir / "experiment_summary.csv",
+        summaries,
+    )
+    markdown_path = write_experiment_summary_markdown(
+        args.output_dir / "README.md",
+        summaries,
+    )
+    comparison_path = save_experiment_summary_plot(
+        args.output_dir / "comparison.png",
+        summaries,
+    )
+
+    print(f"Experiments: {len({item.experiment for item in summaries})}")
+    print(f"Datasets: {len({item.dataset for item in summaries})}")
+    print(f"Summary CSV: {csv_path}")
+    print(f"Summary Markdown: {markdown_path}")
+    print(f"Comparison: {comparison_path}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command-line interface."""
     parser = build_parser()
@@ -337,13 +387,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "generate-demo":
             return _generate_demo(args)
-        if args.command == "evaluate":
+        if args.command in {"evaluate-downsampling", "evaluate"}:
             return _evaluate(args)
         if args.command == "evaluate-outliers":
             return _evaluate_outliers(args)
         if args.command == "evaluate-normals":
             return _evaluate_normals(args)
-        return _evaluate_registration(args)
+        if args.command == "evaluate-registration":
+            return _evaluate_registration(args)
+        return _summarize_results(args)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     return 2

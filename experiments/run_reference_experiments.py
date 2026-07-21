@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pointcloud_playground.evaluation import (
     evaluate_voxel_sizes,
-    write_metrics_csv,
+    write_downsampling_metrics_csv,
 )
 from pointcloud_playground.filtering_evaluation import (
     evaluate_outlier_filter,
@@ -21,12 +21,18 @@ from pointcloud_playground.registration_evaluation import (
     evaluate_registration_cases,
     write_registration_metrics_csv,
 )
+from pointcloud_playground.summary import (
+    collect_experiment_summaries,
+    write_experiment_summary_csv,
+    write_experiment_summary_markdown,
+)
 from pointcloud_playground.synthetic import (
     controlled_surface_normals,
     generate_controlled_density_cloud,
 )
 from pointcloud_playground.visualization import (
     save_comparison_plot,
+    save_experiment_summary_plot,
     save_normal_evaluation_plot,
     save_outlier_filtering_plot,
     save_registration_evaluation_plot,
@@ -35,13 +41,13 @@ from pointcloud_playground.visualization import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run_experiment(
+def run_downsampling_experiment(
     input_path: Path, output_dir: Path, voxel_sizes: list[float]
 ) -> None:
     """Run one reference evaluation and write its metrics and figure."""
     points = load_xyz(input_path)
     results = evaluate_voxel_sizes(points, voxel_sizes)
-    write_metrics_csv(output_dir / "metrics.csv", results)
+    write_downsampling_metrics_csv(output_dir / "metrics.csv", results)
     save_comparison_plot(output_dir / "comparison.png", points, results)
 
 
@@ -122,14 +128,14 @@ def main() -> None:
     """Generate all versioned reference experiments."""
     synthetic_path = ROOT / "data" / "synthetic_controlled_density.xyz"
     save_xyz(synthetic_path, generate_controlled_density_cloud())
-    run_experiment(
+    run_downsampling_experiment(
         synthetic_path,
-        ROOT / "results" / "synthetic",
+        ROOT / "results" / "voxel_downsampling" / "synthetic",
         [0.25, 0.5, 1.0],
     )
-    run_experiment(
+    run_downsampling_experiment(
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
-        ROOT / "results" / "usgs_3dep_iowa",
+        ROOT / "results" / "voxel_downsampling" / "usgs_3dep_iowa",
         [5.0, 10.0, 20.0],
     )
     run_outlier_experiment(
@@ -159,6 +165,17 @@ def main() -> None:
     run_registration_experiment(
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
         ROOT / "results" / "registration" / "usgs_3dep_iowa",
+    )
+    summaries = collect_experiment_summaries(ROOT / "results")
+    summary_dir = ROOT / "results" / "summary"
+    write_experiment_summary_csv(
+        summary_dir / "experiment_summary.csv",
+        summaries,
+    )
+    write_experiment_summary_markdown(summary_dir / "README.md", summaries)
+    save_experiment_summary_plot(
+        summary_dir / "comparison.png",
+        summaries,
     )
 
 

@@ -3,13 +3,22 @@
 Reproducible point-cloud experiments that connect method selection,
 implementation, quantitative evaluation, and documented interpretation.
 
-Version 0.4.0 evaluates point-to-point ICP under known rigid transforms. It
-extends the normal-estimation study from v0.3.0, the outlier-filtering study
-from v0.2.0, and the voxel-downsampling study from v0.1.0. Every experiment
-uses a deterministic synthetic surface and a traceable public USGS 3DEP lidar
-sample.
+Version 0.5.0 adds a cross-experiment evidence summary and reviews the public
+CLI and result layout across voxel downsampling, outlier filtering, normal
+estimation, and rigid registration. Every experiment uses a deterministic
+synthetic surface and a traceable public USGS 3DEP lidar sample.
 
 ## Research Questions
+
+### Cross-experiment review
+
+Can results from different point-cloud methods be made easier to inspect
+without collapsing incompatible metrics into a single score or implied
+ranking?
+
+The working hypothesis is that a common summary schema, explicit condition
+selection rules, and a consistent result layout can improve reviewability
+while preserving the evidence scope and limitations of each experiment.
 
 ### Rigid registration
 
@@ -53,6 +62,11 @@ points and their nearest retained representation.
 
 ## Features
 
+- Cross-experiment CSV, Markdown, and visual evidence summaries
+- Explicit representative-condition rules without universal recommendations
+- Canonical `results/<experiment>/<dataset>/` reference layout
+- Consistent evaluation commands, default output directories, and filenames
+- Backward-compatible `evaluate` alias for `evaluate-downsampling`
 - Point-to-point ICP implemented with SciPy nearest-neighbor search and NumPy
   rigid least-squares alignment
 - Controlled axis-angle rotations and spacing-relative translations
@@ -82,27 +96,27 @@ cd pointcloud-playground
 python -m pip install -e .
 
 pointcloud-playground generate-demo demo.xyz
-pointcloud-playground evaluate-registration demo.xyz \
-  --output-dir output/registration
+pointcloud-playground summarize-results results \
+  --output-dir output/summary
 ```
 
-The registration evaluation writes:
+The cross-experiment review writes:
 
 ```text
-output/registration/
-├── case_01_aligned.xyz
-├── case_01_source.xyz
-├── case_02_aligned.xyz
-├── case_02_source.xyz
-├── case_03_aligned.xyz
-├── case_03_source.xyz
-├── case_04_aligned.xyz
-├── case_04_source.xyz
+output/summary/
 ├── comparison.png
-└── metrics.csv
+├── experiment_summary.csv
+└── README.md
 ```
 
 ## Usage
+
+Summarize all committed reference results:
+
+```bash
+pointcloud-playground summarize-results results \
+  --output-dir output/summary
+```
 
 Generate a repeatable synthetic surface with uneven point density:
 
@@ -146,17 +160,17 @@ pointcloud-playground evaluate-outliers demo.xyz \
 Run the voxel-downsampling experiment:
 
 ```bash
-pointcloud-playground evaluate demo.xyz \
+pointcloud-playground evaluate-downsampling demo.xyz \
   --voxel-sizes 0.25 0.5 1.0 \
-  --output-dir output/downsampling
+  --output-dir output/voxel_downsampling
 ```
 
 Evaluate the included USGS-derived sample at scale-appropriate voxel sizes:
 
 ```bash
-pointcloud-playground evaluate data/usgs_3dep_iowa/sample.xyz \
+pointcloud-playground evaluate-downsampling data/usgs_3dep_iowa/sample.xyz \
   --voxel-sizes 5 10 20 \
-  --output-dir output/usgs
+  --output-dir output/voxel_downsampling_usgs
 ```
 
 Reproduce all committed metrics and figures:
@@ -172,7 +186,44 @@ python -m pip install -e ".[data]"
 python experiments/prepare_public_sample.py
 ```
 
+### CLI and output contract
+
+All four evaluation commands take one positional XYZ input, accept
+`--output-dir`, and write `metrics.csv` plus `comparison.png`. Method-specific
+point clouds, labels, or point-level estimates are additional outputs.
+
+| Experiment | Canonical command | Default output directory |
+| --- | --- | --- |
+| Voxel downsampling | `evaluate-downsampling` | `output/voxel_downsampling` |
+| Outlier filtering | `evaluate-outliers` | `output/outlier_filtering` |
+| Normal estimation | `evaluate-normals` | `output/normal_estimation` |
+| Rigid registration | `evaluate-registration` | `output/registration` |
+
+The earlier `evaluate` command remains available as an alias for
+`evaluate-downsampling`.
+
 ## Methodology
+
+### Cross-experiment summary
+
+The summary reads the eight committed `metrics.csv` files from four
+experiments and two datasets. Each row uses the same schema: experiment,
+dataset, number of evaluated conditions, selected condition, selection rule,
+primary evidence, secondary evidence, evidence scope, and source path.
+
+One representative condition is selected per experiment and dataset:
+
+| Experiment | Selection rule |
+| --- | --- |
+| Voxel downsampling | Retention ratio closest to 50%, as a review point rather than an optimum |
+| Outlier filtering | Highest F1 against controlled injected labels |
+| Normal estimation, synthetic | Lowest mean error against analytic reference normals |
+| Normal estimation, public | Lowest median perturbation error, reported as stability rather than accuracy |
+| Rigid registration | Fraction converged with known-pair RMSE no greater than 0.01 times median spacing |
+
+The summary deliberately does not create a combined score. F1, angular error,
+coverage, and transform recovery describe different questions and cannot be
+ranked on a shared quality axis.
 
 ### Controlled rigid registration
 
@@ -290,6 +341,29 @@ occupied voxel is represented by the centroid of its points.
 All coordinates and distances use the units of the input XYZ file.
 
 ## Evaluation
+
+### Cross-experiment evidence snapshot
+
+The v0.5 review contains eight summary records. The table shows the selected
+review condition and its primary evidence; each row retains its own selection
+rule and evidence scope in
+[`results/summary/README.md`](results/summary/README.md).
+
+| Experiment | Synthetic surface | Public USGS 3DEP sample |
+| --- | --- | --- |
+| Voxel downsampling | Voxel 0.25: 59.1% retained | Voxel 10: 65.4% retained |
+| Outlier filtering | Ratio 1.5: F1 0.934 | Ratio 2.0: F1 0.914 |
+| Normal estimation | k=64: mean reference error 0.846° | k=64: median repeatability error 0.091° |
+| Rigid registration | 3/4 recovered; largest angle 10° | 2/4 recovered; largest angle 5° |
+
+![Cross-experiment evidence snapshot](results/summary/comparison.png)
+
+The summary makes three important boundaries visible. The outlier threshold
+selected by F1 changes between datasets. The public normal result describes
+repeatability rather than accuracy because no reference normals exist. The
+registration recovery rate is lower for the public sample under the same
+spacing-relative offsets and iteration budget. These observations remain
+method-specific evidence, not an overall dataset or algorithm ranking.
 
 ### Rigid registration: synthetic surface
 
@@ -432,7 +506,7 @@ missed noise or removed surface detail is more costly.
 | 0.50 | 1,628 | 27.1% | 0.352 | 0.168 |
 | 1.00 | 434 | 7.2% | 0.813 | 0.382 |
 
-![Synthetic voxel-downsampling comparison](results/synthetic/comparison.png)
+![Synthetic voxel-downsampling comparison](results/voxel_downsampling/synthetic/comparison.png)
 
 Increasing voxel size regularizes the dense center and sharply reduces the
 point count, while point spacing and coverage error both increase.
@@ -449,7 +523,7 @@ recorded in
 | 10 | 3,272 | 65.4% | 7.790 | 2.429 |
 | 20 | 1,262 | 25.2% | 15.399 | 6.896 |
 
-![USGS 3DEP voxel-downsampling comparison](results/usgs_3dep_iowa/comparison.png)
+![USGS 3DEP voxel-downsampling comparison](results/voxel_downsampling/usgs_3dep_iowa/comparison.png)
 
 The 5-unit setting changes this sparse subset only modestly. At 10 and 20
 units, point reduction becomes substantial and coverage error rises.
@@ -461,11 +535,11 @@ pointcloud-playground/
 ├── data/                         # Versioned synthetic and public samples
 ├── experiments/                  # Sample preparation and reference runs
 ├── results/
+│   ├── summary/                  # v0.5 cross-experiment review
 │   ├── registration/             # v0.4 metrics and figures
 │   ├── normal_estimation/        # v0.3 metrics and figures
 │   ├── outlier_filtering/        # v0.2 metrics and figures
-│   ├── synthetic/                # v0.1 synthetic results
-│   └── usgs_3dep_iowa/           # v0.1 public-data results
+│   └── voxel_downsampling/        # v0.1 metrics and figures
 ├── src/pointcloud_playground/
 │   ├── cli.py
 │   ├── downsampling.py
@@ -477,6 +551,7 @@ pointcloud-playground/
 │   ├── outliers.py
 │   ├── registration.py
 │   ├── registration_evaluation.py
+│   ├── summary.py
 │   ├── synthetic.py
 │   └── visualization.py
 ├── tests/
@@ -487,6 +562,14 @@ pointcloud-playground/
 
 ## Limitations
 
+- Summary selections are deterministic review points, not recommended
+  production parameters. A task-specific cost function may select a different
+  condition.
+- Primary metrics are intentionally method-specific. They cannot support a
+  combined score, cross-method ranking, or claim that one dataset is easier in
+  general.
+- The two datasets share an experiment protocol but not the same coordinate
+  scale, sampling pattern, geometry, or ground-truth coverage.
 - Registration uses complete, one-to-one transformed copies with full overlap.
   It does not model partial overlap, outliers, missing regions, or changing
   sampling density.
@@ -532,7 +615,7 @@ pointcloud-playground/
 
 ## Roadmap
 
-- **v0.5:** Cross-experiment summaries and interface review
+- **v0.6:** Controlled partial-overlap registration and correspondence review
 
 Each extension will keep the same pattern: define a question, control the
 input, implement the method, evaluate the result, and document limitations.

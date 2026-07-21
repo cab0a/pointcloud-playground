@@ -7,7 +7,16 @@ parameters. Reproduce all experiments with:
 python experiments/run_reference_experiments.py
 ```
 
-The voxel-downsampling directories contain:
+Reference outputs follow `results/<experiment>/<dataset>/`, where the dataset
+is either `synthetic` or `usgs_3dep_iowa`.
+
+The `summary` directory contains:
+
+- `experiment_summary.csv`: eight records in a shared review schema
+- `README.md`: selection rules, evidence scope, and the CLI interface review
+- `comparison.png`: a non-ranking evidence matrix across methods and datasets
+
+The `voxel_downsampling` directories contain:
 
 - `metrics.csv`: point retention, spacing, and coverage measurements
 - `comparison.png`: input and downsampled XY views colored by height

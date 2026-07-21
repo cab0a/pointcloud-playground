@@ -1,6 +1,7 @@
 """Static visualizations for point-cloud experiments."""
 
 from pathlib import Path
+import textwrap
 
 import matplotlib
 
@@ -16,6 +17,7 @@ from .io import validate_points
 from .normal_evaluation import NormalEvaluationResult
 from .outliers import OutlierMask
 from .registration_evaluation import RegistrationEvaluationResult
+from .summary import ExperimentSummary
 
 
 def _plot_sample(points: NDArray[np.floating], limit: int) -> NDArray[np.float64]:
@@ -24,6 +26,144 @@ def _plot_sample(points: NDArray[np.floating], limit: int) -> NDArray[np.float64
         return cloud
     indices = np.linspace(0, len(cloud) - 1, limit, dtype=int)
     return cloud[indices]
+
+
+def _summary_value(metric: str, value: float) -> str:
+    if metric in {"retention_ratio", "f1", "inlier_retention", "recovery_rate"}:
+        return f"{value:.1%}"
+    if metric.endswith("_deg"):
+        return f"{value:.3f}°"
+    return f"{value:.3f}"
+
+
+def save_experiment_summary_plot(
+    path: str | Path,
+    summaries: list[ExperimentSummary],
+) -> Path:
+    """Save a non-ranking evidence matrix across experiments and datasets."""
+    if not summaries:
+        raise ValueError("At least one experiment summary is required.")
+
+    experiment_order = [
+        "voxel_downsampling",
+        "outlier_filtering",
+        "normal_estimation",
+        "registration",
+    ]
+    dataset_order = ["synthetic", "usgs_3dep_iowa"]
+    experiment_titles = {
+        "voxel_downsampling": "Voxel downsampling",
+        "outlier_filtering": "Outlier filtering",
+        "normal_estimation": "Normal estimation",
+        "registration": "Rigid registration",
+    }
+    dataset_titles = {
+        "synthetic": "Synthetic surface",
+        "usgs_3dep_iowa": "USGS 3DEP sample",
+    }
+    metric_labels = {
+        "coverage_rmse_over_input_spacing": "coverage RMSE / input spacing",
+        "largest_recovered_angle_deg": "largest recovered angle",
+        "mean_angular_error_deg": "mean angular error",
+        "median_neighborhood_radius": "median neighborhood radius",
+        "median_repeatability_error_deg": "median repeatability error",
+    }
+    lookup = {
+        (summary.experiment, summary.dataset): summary
+        for summary in summaries
+    }
+
+    figure, axes = plt.subplots(
+        len(dataset_order),
+        len(experiment_order),
+        figsize=(16, 7.2),
+        constrained_layout=True,
+        squeeze=False,
+    )
+    figure.suptitle(
+        "Cross-Experiment Evidence Snapshot",
+        fontsize=17,
+        fontweight="bold",
+    )
+    for row_index, dataset in enumerate(dataset_order):
+        for column_index, experiment in enumerate(experiment_order):
+            axis = axes[row_index, column_index]
+            summary = lookup.get((experiment, dataset))
+            axis.set_facecolor("#f7f9fb")
+            axis.set_xticks([])
+            axis.set_yticks([])
+            for spine in axis.spines.values():
+                spine.set_color("#ccd4dd")
+            if row_index == 0:
+                axis.set_title(
+                    experiment_titles[experiment],
+                    fontsize=12,
+                    fontweight="bold",
+                    pad=12,
+                )
+            if summary is None:
+                axis.text(0.5, 0.5, "No summary", ha="center", va="center")
+                continue
+
+            primary_label = metric_labels.get(
+                summary.primary_metric,
+                summary.primary_metric.replace("_", " "),
+            )
+            secondary_label = metric_labels.get(
+                summary.secondary_metric,
+                summary.secondary_metric.replace("_", " "),
+            )
+            evidence = "\n".join(textwrap.wrap(summary.evidence_scope, width=36))
+            axis.text(
+                0.05,
+                0.91,
+                dataset_titles[dataset],
+                transform=axis.transAxes,
+                fontsize=11,
+                fontweight="bold",
+                va="top",
+            )
+            axis.text(
+                0.05,
+                0.76,
+                f"Selected condition\n{summary.selected_condition}",
+                transform=axis.transAxes,
+                fontsize=10,
+                va="top",
+            )
+            axis.text(
+                0.05,
+                0.53,
+                f"Primary evidence\n{primary_label}: "
+                f"{_summary_value(summary.primary_metric, summary.primary_value)}",
+                transform=axis.transAxes,
+                fontsize=10,
+                va="top",
+            )
+            axis.text(
+                0.05,
+                0.31,
+                f"Secondary evidence\n{secondary_label}: "
+                f"{_summary_value(summary.secondary_metric, summary.secondary_value)}",
+                transform=axis.transAxes,
+                fontsize=9,
+                va="top",
+            )
+            axis.text(
+                0.05,
+                0.10,
+                evidence,
+                transform=axis.transAxes,
+                fontsize=8.5,
+                color="#435160",
+                va="bottom",
+            )
+
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=180)
+    plt.close(figure)
+    return output_path
 
 
 def save_comparison_plot(

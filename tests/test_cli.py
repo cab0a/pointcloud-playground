@@ -1,6 +1,20 @@
 from pathlib import Path
 
-from pointcloud_playground.cli import main
+from pointcloud_playground.cli import build_parser, main
+
+
+def test_cli_uses_consistent_default_output_directories() -> None:
+    parser = build_parser()
+    commands = {
+        "evaluate-downsampling": Path("output/voxel_downsampling"),
+        "evaluate-outliers": Path("output/outlier_filtering"),
+        "evaluate-normals": Path("output/normal_estimation"),
+        "evaluate-registration": Path("output/registration"),
+    }
+
+    for command, expected in commands.items():
+        args = parser.parse_args([command, "input.xyz"])
+        assert args.output_dir == expected
 
 
 def test_cli_generates_demo_and_evaluation_outputs(tmp_path: Path) -> None:
@@ -11,7 +25,7 @@ def test_cli_generates_demo_and_evaluation_outputs(tmp_path: Path) -> None:
     assert (
         main(
             [
-                "evaluate",
+                "evaluate-downsampling",
                 str(input_path),
                 "--voxel-sizes",
                 "0.5",
@@ -109,3 +123,43 @@ def test_cli_generates_registration_evaluation_outputs(tmp_path: Path) -> None:
     assert (output_dir / "comparison.png").is_file()
     assert (output_dir / "case_01_source.xyz").is_file()
     assert (output_dir / "case_01_aligned.xyz").is_file()
+
+
+def test_cli_keeps_the_legacy_downsampling_alias(tmp_path: Path) -> None:
+    input_path = tmp_path / "demo.xyz"
+    output_dir = tmp_path / "legacy"
+    assert main(["generate-demo", str(input_path), "--points", "100"]) == 0
+
+    assert (
+        main(
+            [
+                "evaluate",
+                str(input_path),
+                "--voxel-sizes",
+                "1.0",
+                "--output-dir",
+                str(output_dir),
+            ]
+        )
+        == 0
+    )
+    assert (output_dir / "metrics.csv").is_file()
+
+
+def test_cli_generates_cross_experiment_summary(tmp_path: Path) -> None:
+    results_root = Path(__file__).resolve().parents[1] / "results"
+    output_dir = tmp_path / "summary"
+
+    result = main(
+        [
+            "summarize-results",
+            str(results_root),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert result == 0
+    assert (output_dir / "experiment_summary.csv").is_file()
+    assert (output_dir / "README.md").is_file()
+    assert (output_dir / "comparison.png").is_file()

@@ -5,7 +5,7 @@ import numpy as np
 
 from pointcloud_playground.evaluation import (
     evaluate_voxel_sizes,
-    write_metrics_csv,
+    write_downsampling_metrics_csv,
 )
 from pointcloud_playground.synthetic import generate_controlled_density_cloud
 
@@ -24,7 +24,10 @@ def test_metrics_csv_is_generated(tmp_path: Path) -> None:
     points = generate_controlled_density_cloud(point_count=200, seed=3)
     results = evaluate_voxel_sizes(points, [0.5])
 
-    output_path = write_metrics_csv(tmp_path / "metrics.csv", results)
+    output_path = write_downsampling_metrics_csv(
+        tmp_path / "metrics.csv",
+        results,
+    )
 
     with output_path.open(encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
