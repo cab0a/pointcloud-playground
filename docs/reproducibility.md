@@ -16,6 +16,7 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 python -m pip check
 python -m pytest
+python -m build
 python experiments/run_reference_experiments.py \
   --output-root reproduced_results
 ```
@@ -96,3 +97,13 @@ python -m pip freeze > reproduction-environment.txt
 
 An environment record created this way is local evidence and is not required
 to run the repository.
+
+## Stable-release qualification
+
+Stable releases also follow
+[`docs/release-checklist.md`](release-checklist.md). The checklist covers
+version synchronization, API and output compatibility, wheel construction,
+README commands, sensitive-information review, CI, tagging, Release notes, and
+profile synchronization. Passing the checklist qualifies the documented
+repository interface; it does not convert the experimental methods into a
+large-scale production library.

@@ -1,4 +1,4 @@
-"""Reviewed public API for reproducible point-cloud experiments."""
+"""Stable public API for reproducible point-cloud experiments."""
 
 from .downsampling import voxel_downsample
 from .io import PointCloud, load_xyz, save_xyz, validate_points
@@ -24,7 +24,7 @@ from .synthetic import (
     generate_controlled_density_cloud,
 )
 
-__version__ = "0.9.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "ContaminatedPointCloud",

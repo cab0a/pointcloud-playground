@@ -35,3 +35,21 @@ def test_runtime_version_matches_package_metadata() -> None:
     assert pointcloud_playground.__version__ == importlib.metadata.version(
         "pointcloud-playground"
     )
+
+
+def test_stable_release_metadata() -> None:
+    metadata = importlib.metadata.metadata("pointcloud-playground")
+    classifiers = set(metadata.get_all("Classifier") or [])
+    project_urls = {
+        label: url
+        for label, url in (
+            item.split(", ", maxsplit=1)
+            for item in metadata.get_all("Project-URL") or []
+        )
+    }
+
+    assert "Development Status :: 5 - Production/Stable" in classifiers
+    assert project_urls["Repository"] == (
+        "https://github.com/cab0a/pointcloud-playground"
+    )
+    assert project_urls["Changelog"].endswith("/CHANGELOG.md")

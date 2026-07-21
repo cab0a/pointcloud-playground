@@ -2,15 +2,36 @@
 
 ## Scope
 
-Version 0.9 defines a small top-level API for point-cloud I/O, deterministic
+Version 1.0 defines a stable top-level API for point-cloud I/O, deterministic
 data generation, core processing methods, and rigid registration. These names
 are exported through `pointcloud_playground.__all__` and can be imported
 directly from `pointcloud_playground`.
 
 The evaluation and reporting modules remain reproducible research workflows.
-Their CLI commands and CSV outputs are documented, but their complete Python
-call signatures are not yet declared stable. Compatibility will be reviewed
-again for v1.0.
+Their CLI commands and CSV outputs are documented interfaces, but direct
+imports from those modules are outside the stable top-level Python API.
+
+## Stability policy
+
+The following interfaces are stable throughout the 1.x series:
+
+- names exported through `pointcloud_playground.__all__`, including their
+  documented parameters, return types, and error behavior;
+- existing CLI command names, options, and their meanings;
+- the primary `metrics.csv` and `comparison.png` output filenames for each
+  evaluation command;
+- existing CSV column names and metric definitions.
+
+Minor releases may add optional parameters, commands, exports, or CSV columns
+without changing existing behavior. Removing or renaming a stable interface,
+changing a documented default, or changing the meaning of an existing metric
+requires a new major version.
+
+Private names, visualization layout details, internal implementation modules,
+and direct imports from experiment-specific evaluation modules are not covered
+by the 1.x compatibility guarantee. Scientific conclusions also remain limited
+to the documented datasets and controlled protocols; API stability is not a
+claim of universal method validity.
 
 ## Data contract
 
@@ -84,9 +105,9 @@ CSV writers, and diagnostics used by the CLI and reference runner.
 | `joint_evaluation` | Joint overlap-and-outlier sensitivity |
 | `summary` | Cross-experiment evidence summary |
 
-Use the CLI for the versioned output contract. Direct module imports are
-appropriate for adapting an experiment, but should be reviewed when upgrading
-before v1.0.
+Use the CLI for the stable output contract. Direct module imports are
+appropriate for adapting an experiment, but are not part of the top-level 1.x
+compatibility guarantee.
 
 ## Errors and units
 

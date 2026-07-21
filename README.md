@@ -3,12 +3,11 @@
 Reproducible point-cloud experiments that connect method selection,
 implementation, quantitative evaluation, and documented interpretation.
 
-Version 0.9.0 reviews the project as a reproducible research interface. It
-defines a focused top-level Python API, documents the CLI and data contracts,
-supports non-destructive reference regeneration, and adds an automated
-comparison of committed and regenerated evidence. The seven existing
-experiments continue to use a deterministic synthetic surface and a traceable
-public USGS 3DEP lidar sample.
+Version 1.0.0 is the stable public portfolio release. It defines a documented
+1.x compatibility policy for the top-level Python API, CLI, primary output
+filenames, and existing CSV schemas. The seven experiments, deterministic
+synthetic surface, traceable public USGS 3DEP lidar sample, and committed
+reference results are unchanged from v0.9.0.
 
 ## Research Questions
 
@@ -98,6 +97,9 @@ points and their nearest retained representation.
 
 ## Features
 
+- Stable 1.x compatibility contract for public Python and CLI interfaces
+- Wheel build and installation verification across Python 3.10 through 3.14
+- Public changelog and repeatable stable-release checklist
 - Reviewed top-level Python API for core I/O, processing, and registration
 - Documented array, XYZ, CLI, output, error, and compatibility contracts
 - Non-destructive reference generation into a caller-selected output root
@@ -311,7 +313,7 @@ The earlier `evaluate` command remains available as an alias for
 
 ### Python API
 
-The reviewed top-level API covers point-cloud validation and XYZ I/O,
+The stable top-level API covers point-cloud validation and XYZ I/O,
 deterministic synthetic data, voxel downsampling, PCA normal estimation,
 controlled outliers, and rigid registration.
 
@@ -322,8 +324,8 @@ points = load_xyz("data/synthetic_controlled_density.xyz")
 reduced = voxel_downsample(points, voxel_size=0.5)
 ```
 
-The full public-name list, data contract, examples, units, errors, and
-pre-v1.0 compatibility boundary are documented in
+The full public-name list, data contract, examples, units, errors, and 1.x
+compatibility policy are documented in
 [`docs/api.md`](docs/api.md).
 
 ### Reproducibility contract
@@ -591,6 +593,19 @@ occupied voxel is represented by the centroid of its points.
 All coordinates and distances use the units of the input XYZ file.
 
 ## Evaluation
+
+### v1.0 stable-release review
+
+The stable-release review freezes the documented top-level Python API, existing
+CLI commands and options, primary evaluation filenames, and existing CSV
+columns for the 1.x series. Package metadata now identifies the project as
+stable, links back to its repository and changelog, and includes a wheel build
+and installation check in every supported Python-version CI job.
+
+No experiment method, parameter, metric, committed result, or scientific
+interpretation changed for v1.0. The same complete verifier used in v0.9 is run
+as release evidence. The public checklist records compatibility, provenance,
+sensitive-information, build, CI, tag, Release, and profile checks.
 
 ### v0.9 interface and reproducibility review
 
@@ -944,8 +959,9 @@ units, point reduction becomes substantial and coverage error rises.
 
 ```text
 pointcloud-playground/
+├── CHANGELOG.md                  # Versioned public change history
 ├── data/                         # Versioned synthetic and public samples
-├── docs/                         # API and reproducibility contracts
+├── docs/                         # API, reproducibility, and release contracts
 ├── experiments/                  # Preparation, reference runs, and verification
 ├── results/
 │   ├── summary/                  # Cross-experiment evidence review
@@ -1070,14 +1086,27 @@ pointcloud-playground/
 - Supported dependencies use minimum versions rather than one universal lock
   file. Archival reproduction should record the interpreter and installed
   package versions.
+- The v1.0 stability guarantee covers the documented repository interfaces,
+  not PyPI availability, large-scale processing, deployment support, or
+  production suitability for arbitrary sensor data.
+- Stable interfaces preserve compatibility, but controlled experimental
+  conclusions remain bounded by the documented inputs, parameters, and metrics.
 
 ## Roadmap
 
 - **v0.9:** Completed — documentation, API, and reproducibility review
-- **v1.0:** Planned — stable public portfolio release
+- **v1.0:** Completed — stable public portfolio release
+
+Post-1.0 work will prioritize backward-compatible corrections, documentation,
+and evidence-driven experiments using generated or traceable public data.
+Compatibility changes will follow the policy in [`docs/api.md`](docs/api.md)
+and every release will follow
+[`docs/release-checklist.md`](docs/release-checklist.md).
 
 Each extension will keep the same pattern: define a question, control the
 input, implement the method, evaluate the result, and document limitations.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the release history.
 
 ## License
 
