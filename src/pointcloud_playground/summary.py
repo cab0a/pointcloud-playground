@@ -12,6 +12,7 @@ EXPERIMENTS = (
     "normal_estimation",
     "registration",
     "partial_overlap_registration",
+    "trim_sensitivity",
 )
 DATASETS = ("synthetic", "usgs_3dep_iowa")
 
@@ -224,6 +225,50 @@ def _summarize_partial_overlap_registration(
     )
 
 
+def _summarize_trim_sensitivity(
+    rows: list[dict[str, str]], dataset: str
+) -> ExperimentSummary:
+    by_fraction: dict[float, list[dict[str, str]]] = {}
+    for row in rows:
+        fraction = _number(row, "trim_fraction")
+        by_fraction.setdefault(fraction, []).append(row)
+    overlap_counts = {len(fraction_rows) for fraction_rows in by_fraction.values()}
+    if len(overlap_counts) != 1:
+        raise ValueError("Every trim fraction must use the same overlap sweep.")
+
+    def recovery_rate(fraction_rows: list[dict[str, str]]) -> float:
+        return sum(
+            row.get("recovered", "").lower() == "true"
+            for row in fraction_rows
+        ) / len(fraction_rows)
+
+    selected_fraction, selected_rows = max(
+        by_fraction.items(),
+        key=lambda item: (recovery_rate(item[1]), item[0]),
+    )
+    mean_precision = sum(
+        _number(row, "correct_match_precision") for row in selected_rows
+    ) / len(selected_rows)
+    return ExperimentSummary(
+        experiment="trim_sensitivity",
+        dataset=dataset,
+        conditions_evaluated=len(rows),
+        selected_condition=f"trim_fraction={selected_fraction:g}",
+        selection_rule=(
+            "Highest controlled recovery rate across the overlap sweep; "
+            "ties retain more correspondences"
+        ),
+        primary_metric="recovery_rate",
+        primary_value=recovery_rate(selected_rows),
+        secondary_metric="mean_correct_match_precision",
+        secondary_value=mean_precision,
+        evidence_scope=(
+            "Known transform, overlap membership, and exact overlap pairs"
+        ),
+        source_metrics=_metrics_source("trim_sensitivity", dataset),
+    )
+
+
 def collect_experiment_summaries(
     results_root: str | Path,
 ) -> list[ExperimentSummary]:
@@ -237,6 +282,7 @@ def collect_experiment_summaries(
         "partial_overlap_registration": (
             _summarize_partial_overlap_registration
         ),
+        "trim_sensitivity": _summarize_trim_sensitivity,
     }
     summaries: list[ExperimentSummary] = []
     for experiment in EXPERIMENTS:
@@ -275,6 +321,8 @@ def _format_value(metric: str, value: float) -> str:
         "recovery_rate",
     }
     if metric in percentage_metrics or metric.endswith("_recovery_rate"):
+        return f"{value:.1%}"
+    if metric.endswith("_precision") or metric.endswith("_recall"):
         return f"{value:.1%}"
     if metric.endswith("_deg"):
         return f"{value:.3f}°"
@@ -333,13 +381,19 @@ def write_experiment_summary_markdown(
             "",
             "## Interface Review",
             "",
-            "All evaluation commands use a positional XYZ input, accept `--output-dir`,",
+            (
+                "All evaluation commands use a positional XYZ input, "
+                "accept `--output-dir`,"
+            ),
             "and create `metrics.csv` plus `comparison.png`. Additional files contain",
             "method-specific point-level or point-cloud outputs.",
             "",
             "| Experiment | Canonical command | Default output directory |",
             "| --- | --- | --- |",
-            "| Voxel downsampling | `evaluate-downsampling` | `output/voxel_downsampling` |",
+            (
+                "| Voxel downsampling | `evaluate-downsampling` | "
+                "`output/voxel_downsampling` |"
+            ),
             "| Outlier filtering | `evaluate-outliers` | `output/outlier_filtering` |",
             "| Normal estimation | `evaluate-normals` | `output/normal_estimation` |",
             "| Rigid registration | `evaluate-registration` | `output/registration` |",
@@ -347,6 +401,10 @@ def write_experiment_summary_markdown(
                 "| Partial-overlap registration | "
                 "`evaluate-partial-overlap` | "
                 "`output/partial_overlap_registration` |"
+            ),
+            (
+                "| Trim sensitivity | `evaluate-trim-sensitivity` | "
+                "`output/trim_sensitivity` |"
             ),
             "",
             "The earlier `evaluate` command remains as an alias for",

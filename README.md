@@ -3,13 +3,25 @@
 Reproducible point-cloud experiments that connect method selection,
 implementation, quantitative evaluation, and documented interpretation.
 
-Version 0.6.0 adds a controlled partial-overlap registration experiment. It
-compares ordinary all-pairs ICP with a fixed-fraction trimmed variant and uses
-known overlap correspondences to distinguish correct recovery from a low but
-misleading nearest-neighbor objective. Every experiment uses a deterministic
-synthetic surface and a traceable public USGS 3DEP lidar sample.
+Version 0.7.0 adds trim-fraction sensitivity analysis and correspondence
+diagnostics. A fixed grid from 0.4 to 1.0 is evaluated across four controlled
+overlap levels, using exact overlap labels to measure which retained pairs can
+be valid and which nearest-neighbor matches are correct. Every experiment uses
+a deterministic synthetic surface and a traceable public USGS 3DEP lidar
+sample.
 
 ## Research Questions
+
+### Trim-fraction sensitivity
+
+How does the retained-correspondence fraction interact with actual scan
+overlap, and what happens to correspondence precision and recall when the
+retained fraction exceeds the available overlap?
+
+The working hypothesis is that smaller fractions will reject unmatched scan
+regions and improve precision, but will retain fewer correct overlap pairs.
+Fractions above the true overlap are expected to admit unavoidable non-overlap
+pairs, bias the transform estimate, and create a sharp recovery boundary.
 
 ### Partial-overlap registration
 
@@ -74,6 +86,11 @@ points and their nearest retained representation.
 
 ## Features
 
+- Fixed 0.4-to-1.0 trim-fraction grid across four controlled overlap levels
+- Retained-source overlap ratio and overlap-source retention diagnostics
+- Exact nearest-neighbor match precision and recall from known overlap pairs
+- Retained and rejected residual diagnostics normalized by median spacing
+- Recovery and known-overlap error heatmaps with precision and recall curves
 - Controlled equal-size scan pairs with 100%, 80%, 60%, and 40% overlap
 - All-pairs ICP compared with ICP retaining the closest 70% of correspondences
 - Known-overlap, all-source nearest-neighbor, and transform-recovery metrics
@@ -112,20 +129,16 @@ cd pointcloud-playground
 python -m pip install -e .
 
 pointcloud-playground generate-demo demo.xyz
-pointcloud-playground evaluate-partial-overlap demo.xyz \
-  --output-dir output/partial_overlap_registration
+pointcloud-playground evaluate-trim-sensitivity demo.xyz \
+  --output-dir output/trim_sensitivity
 ```
 
-The partial-overlap evaluation writes:
+The sensitivity evaluation writes:
 
 ```text
-output/partial_overlap_registration/
+output/trim_sensitivity/
 ├── comparison.png
-├── metrics.csv
-├── case_01_target.xyz
-├── case_01_source.xyz
-├── case_01_all_pairs_aligned.xyz
-└── case_01_trimmed_aligned.xyz
+└── metrics.csv
 ```
 
 ## Usage
@@ -141,6 +154,19 @@ Generate a repeatable synthetic surface with uneven point density:
 
 ```bash
 pointcloud-playground generate-demo demo.xyz --points 6000 --seed 42
+```
+
+Evaluate trim-fraction sensitivity with known correspondence diagnostics:
+
+```bash
+pointcloud-playground evaluate-trim-sensitivity demo.xyz \
+  --overlap-ratios 1.0 0.8 0.6 0.4 \
+  --trim-fractions 0.4 0.5 0.6 0.7 0.8 0.9 1.0 \
+  --angle 2 \
+  --translation-scale 0.5 \
+  --max-iterations 80 \
+  --tolerance-scale 1e-6 \
+  --output-dir output/trim_sensitivity
 ```
 
 Compare all-pairs and trimmed ICP across controlled scan overlap:
@@ -220,7 +246,7 @@ python experiments/prepare_public_sample.py
 
 ### CLI and output contract
 
-All five evaluation commands take one positional XYZ input, accept
+All six evaluation commands take one positional XYZ input, accept
 `--output-dir`, and write `metrics.csv` plus `comparison.png`. Method-specific
 point clouds, labels, or point-level estimates are additional outputs.
 
@@ -231,6 +257,7 @@ point clouds, labels, or point-level estimates are additional outputs.
 | Normal estimation | `evaluate-normals` | `output/normal_estimation` |
 | Rigid registration | `evaluate-registration` | `output/registration` |
 | Partial-overlap registration | `evaluate-partial-overlap` | `output/partial_overlap_registration` |
+| Trim sensitivity | `evaluate-trim-sensitivity` | `output/trim_sensitivity` |
 
 The earlier `evaluate` command remains available as an alias for
 `evaluate-downsampling`.
@@ -239,7 +266,7 @@ The earlier `evaluate` command remains available as an alias for
 
 ### Cross-experiment summary
 
-The summary reads the ten committed `metrics.csv` files from five
+The summary reads the twelve committed `metrics.csv` files from six
 experiments and two datasets. Each row uses the same schema: experiment,
 dataset, number of evaluated conditions, selected condition, selection rule,
 primary evidence, secondary evidence, evidence scope, and source path.
@@ -254,10 +281,44 @@ One representative condition is selected per experiment and dataset:
 | Normal estimation, public | Lowest median perturbation error, reported as stability rather than accuracy |
 | Rigid registration | Fraction converged with known-pair RMSE no greater than 0.01 times median spacing |
 | Partial-overlap registration | Recovery rates for fixed 70% trimming and all-pairs ICP across the same overlap sweep |
+| Trim sensitivity | Highest recovery rate across the overlap sweep; ties retain more correspondences |
 
 The summary deliberately does not create a combined score. F1, angular error,
 coverage, and transform recovery describe different questions and cannot be
 ranked on a shared quality axis.
+
+### Trim-fraction sensitivity and correspondence diagnostics
+
+The v0.7 experiment reuses the controlled scan construction, 2-degree
+rotation, half-spacing translation, 80-iteration budget, and recovery criterion
+from v0.6. It evaluates the Cartesian product of:
+
+```text
+overlap ratios:  1.0, 0.8, 0.6, 0.4
+trim fractions:  0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
+```
+
+The `1.0` endpoint is ordinary all-pairs ICP. The other settings retain the
+stated fraction of source-to-nearest-target pairs with the smallest residuals
+at every iteration. No fraction is tuned independently for either dataset.
+
+The construction also identifies which source points belong to the true
+overlap and their exact generating target indices. After the final ICP
+iteration, correspondences are sorted once more by residual for diagnostics:
+
+```text
+retained-source overlap ratio = retained sources in overlap / retained pairs
+overlap-source retention = retained sources in overlap / known overlap points
+correct-match precision = exact overlap matches / retained pairs
+correct-match recall = exact overlap matches / known overlap points
+```
+
+Membership in the overlap is necessary but not sufficient for a correct match;
+therefore the membership and exact-match measurements are reported separately.
+The fraction with the highest recovery rate across the full overlap sweep is
+shown in the cross-experiment summary, with ties favoring the fraction that
+retains more correspondences. This is a labeled evaluation rule, not an
+automatic parameter recommendation.
 
 ### Controlled partial-overlap registration
 
@@ -391,6 +452,12 @@ occupied voxel is represented by the centroid of its points.
 | Known-overlap RMSE | RMSE over shared source-target pairs only | Ground-truth alignment error under partial overlap |
 | All-source nearest-neighbor RMSE | RMSE from every aligned source point to its nearest target point | Includes source-only regions with no correct target counterpart |
 | Recovery rate | Recovered cases / evaluated cases | Controlled success frequency under the stated sweep and criterion |
+| Retained-source overlap ratio | Retained pairs whose source belongs to the known overlap / retained pairs | Composition of the retained set before checking target identity |
+| Overlap-source retention | Retained overlap sources / all known overlap sources | Fraction of potentially valid source points kept |
+| Correct-match precision | Retained exact overlap matches / retained pairs | Reliability of retained nearest-neighbor pairs |
+| Correct-match recall | Retained exact overlap matches / all known overlap pairs | Fraction of ground-truth pairs retained correctly |
+| Median retained residual | Median nearest-neighbor distance among retained pairs | Residual scale used by the trimmed objective |
+| Median rejected residual | Median nearest-neighbor distance among rejected pairs | Separation between retained and excluded pairs; undefined at fraction 1.0 |
 | Normalized error | Error divided by median point spacing | Scale-relative comparison between datasets |
 | Reference angular error | Sign-invariant angle to an analytic reference normal | Accuracy on the controlled synthetic surface |
 | Repeatability error | Angle between normals before and after controlled perturbation | Sensitivity to small coordinate changes |
@@ -411,7 +478,7 @@ All coordinates and distances use the units of the input XYZ file.
 
 ### Cross-experiment evidence snapshot
 
-The v0.6 review contains ten summary records. The table shows the selected
+The v0.7 review contains twelve summary records. The table shows the selected
 review condition and its primary evidence; each row retains its own selection
 rule and evidence scope in
 [`results/summary/README.md`](results/summary/README.md).
@@ -423,6 +490,7 @@ rule and evidence scope in
 | Normal estimation | k=64: mean reference error 0.846° | k=64: median repeatability error 0.091° |
 | Rigid registration | 3/4 recovered; largest angle 10° | 2/4 recovered; largest angle 5° |
 | Partial overlap | Trimmed 2/4 recovered; all-pairs 1/4 | Trimmed 2/4 recovered; all-pairs 1/4 |
+| Trim sensitivity | Fraction 0.4: 4/4 recovered; mean precision 100% | Fraction 0.4: 4/4 recovered; mean precision 100% |
 
 ![Cross-experiment evidence snapshot](results/summary/comparison.png)
 
@@ -432,8 +500,55 @@ repeatability rather than accuracy because no reference normals exist. The
 registration recovery rate is lower for the public sample under the same
 spacing-relative offsets and iteration budget. The partial-overlap comparison
 shows the same recovery boundary on both reference datasets, but that does not
-establish a universal trim fraction. These observations remain method-specific
-evidence, not an overall dataset or algorithm ranking.
+establish a universal trim fraction. The sensitivity sweep makes that boundary
+visible and labels the selected 0.4 condition as an evaluation result rather
+than a production default. These observations remain method-specific evidence,
+not an overall dataset or algorithm ranking.
+
+### Trim sensitivity: synthetic surface
+
+The recovery matrix follows the expected boundary. Full overlap recovers for
+every fraction. Under partial overlap, the largest recovered fraction is equal
+to the controlled overlap ratio; the next larger tested fraction fails.
+
+| Trim fraction | 100% overlap | 80% overlap | 60% overlap | 40% overlap |
+| ---: | :---: | :---: | :---: | :---: |
+| 0.4 | Yes | Yes | Yes | Yes |
+| 0.5 | Yes | Yes | Yes | No |
+| 0.6 | Yes | Yes | Yes | No |
+| 0.7 | Yes | Yes | No | No |
+| 0.8 | Yes | Yes | No | No |
+| 0.9 | Yes | No | No | No |
+| 1.0 | Yes | No | No | No |
+
+![Trim-fraction sensitivity on the synthetic surface](results/trim_sensitivity/synthetic/comparison.png)
+
+At the largest recovered fraction for 80%, 60%, and 40% overlap, exact-match
+precision and recall are both 100%. Moving one grid step above the overlap
+causes precision to fall to 0% for the 80% and 60% cases. In the 40% case,
+fraction 0.5 retains only 3.52% correct pairs and produces known-overlap RMSE
+of 7.639 times median spacing. The result links recovery failure to incorrect
+retained correspondences rather than to the numerical stopping flag alone.
+
+### Trim sensitivity: public USGS 3DEP sample
+
+The public sample produces the same recovery matrix despite its different
+scale, geometry, and sampling pattern.
+
+| Actual overlap | Largest recovered fraction | Next tested fraction | Next-fraction precision | Next-fraction overlap RMSE / spacing |
+| ---: | ---: | ---: | ---: | ---: |
+| 80.01% | 0.8 | 0.9 | 0.0% | 9.925 |
+| 59.98% | 0.6 | 0.7 | 0.0% | 9.408 |
+| 40.00% | 0.4 | 0.5 | 0.0% | 8.369 |
+
+![Trim-fraction sensitivity on the USGS 3DEP sample](results/trim_sensitivity/usgs_3dep_iowa/comparison.png)
+
+The 60% fraction retains one more pair than the rounded overlap count, giving
+99.953% precision and 100% recall; its normalized known-overlap RMSE remains
+0.000262 and satisfies the stated recovery criterion. This rounding edge case
+is useful evidence that the observed boundary is approximate and protocol-
+specific, not a theorem that the fraction must be numerically less than or
+equal to overlap.
 
 ### Partial overlap: synthetic surface
 
@@ -648,7 +763,8 @@ pointcloud-playground/
 ├── data/                         # Versioned synthetic and public samples
 ├── experiments/                  # Sample preparation and reference runs
 ├── results/
-│   ├── summary/                  # v0.6 cross-experiment review
+│   ├── summary/                  # v0.7 cross-experiment review
+│   ├── trim_sensitivity/         # v0.7 metrics and figures
 │   ├── partial_overlap_registration/ # v0.6 metrics and figures
 │   ├── registration/             # v0.4 metrics and figures
 │   ├── normal_estimation/        # v0.3 metrics and figures
@@ -668,6 +784,7 @@ pointcloud-playground/
 │   ├── registration_evaluation.py
 │   ├── summary.py
 │   ├── synthetic.py
+│   ├── trim_evaluation.py
 │   └── visualization.py
 ├── tests/
 ├── LICENSE
@@ -692,6 +809,19 @@ pointcloud-playground/
   sampled scans, or real sensor trajectories.
 - Exact overlap pairs are available only because the scans are derived from one
   indexed cloud. Production registration normally has no such ground truth.
+- The sensitivity grid is deliberately coarse and does not estimate overlap or
+  choose a trim fraction from unlabeled data. Its selected condition uses
+  controlled ground truth and is not available in production.
+- The observed boundary depends on shared samples, modest initialization, exact
+  overlap labels, the nearest-neighbor objective, and the fixed iteration
+  budget. A fraction at or below overlap is not guaranteed to recover other
+  scans.
+- Fractions below 0.4 are not evaluated. Very small retained sets can become
+  geometrically unrepresentative or degenerate even when their residuals are
+  low.
+- Exact-match precision and recall depend on unique generating indices in this
+  construction. Repeated coordinates and independently sampled surfaces would
+  require a different ground-truth correspondence definition.
 - The 70% trim fraction is a fixed comparison condition, not a recommended or
   optimized parameter. Closest-residual trimming can discard correct pairs or
   retain incorrect pairs, especially when actual overlap is lower than the
@@ -738,8 +868,8 @@ pointcloud-playground/
 
 ## Roadmap
 
-- **v0.7:** Trim-fraction sensitivity and correspondence diagnostics under
-  controlled partial overlap
+- **v0.8:** Joint sensitivity to partial overlap and controlled outlier
+  contamination
 
 Each extension will keep the same pattern: define a question, control the
 input, implement the method, evaluate the result, and document limitations.

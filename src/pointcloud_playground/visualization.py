@@ -19,6 +19,7 @@ from .outliers import OutlierMask
 from .overlap_evaluation import PartialOverlapEvaluationResult
 from .registration_evaluation import RegistrationEvaluationResult
 from .summary import ExperimentSummary
+from .trim_evaluation import TrimSensitivityResult
 
 
 def _plot_sample(points: NDArray[np.floating], limit: int) -> NDArray[np.float64]:
@@ -37,6 +38,8 @@ def _summary_value(metric: str, value: float) -> str:
         "recovery_rate",
     }
     if metric in percentage_metrics or metric.endswith("_recovery_rate"):
+        return f"{value:.1%}"
+    if metric.endswith("_precision") or metric.endswith("_recall"):
         return f"{value:.1%}"
     if metric.endswith("_deg"):
         return f"{value:.3f}°"
@@ -57,6 +60,7 @@ def save_experiment_summary_plot(
         "normal_estimation",
         "registration",
         "partial_overlap_registration",
+        "trim_sensitivity",
     ]
     dataset_order = ["synthetic", "usgs_3dep_iowa"]
     experiment_titles = {
@@ -65,6 +69,7 @@ def save_experiment_summary_plot(
         "normal_estimation": "Normal estimation",
         "registration": "Rigid registration",
         "partial_overlap_registration": "Partial overlap",
+        "trim_sensitivity": "Trim sensitivity",
     }
     dataset_titles = {
         "synthetic": "Synthetic surface",
@@ -78,6 +83,7 @@ def save_experiment_summary_plot(
         "median_repeatability_error_deg": "median repeatability error",
         "trimmed_recovery_rate": "trimmed recovery rate",
         "all_pairs_recovery_rate": "all-pairs recovery rate",
+        "mean_correct_match_precision": "mean correct-pair precision",
     }
     lookup = {
         (summary.experiment, summary.dataset): summary
@@ -87,7 +93,7 @@ def save_experiment_summary_plot(
     figure, axes = plt.subplots(
         len(dataset_order),
         len(experiment_order),
-        figsize=(20, 7.2),
+        figsize=(24, 7.2),
         constrained_layout=True,
         squeeze=False,
     )
@@ -814,6 +820,174 @@ def save_partial_overlap_evaluation_plot(
     metric_axis.set_yscale("log")
     metric_axis.grid(alpha=0.25)
     metric_axis.legend(fontsize=7, loc="best")
+
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=170)
+    plt.close(figure)
+    return output_path
+
+
+def save_trim_sensitivity_plot(
+    path: str | Path,
+    results: list[TrimSensitivityResult],
+) -> Path:
+    """Save recovery, error, precision, and recall sensitivity views."""
+    if not results:
+        raise ValueError("At least one trim-sensitivity result is required.")
+
+    overlaps = sorted(
+        {result.actual_overlap_ratio for result in results},
+        reverse=True,
+    )
+    fractions = sorted({result.trim_fraction for result in results})
+    lookup = {
+        (result.actual_overlap_ratio, result.trim_fraction): result
+        for result in results
+    }
+    if len(lookup) != len(overlaps) * len(fractions):
+        raise ValueError(
+            "Trim-sensitivity results must form a complete unique grid."
+        )
+
+    recovery = np.array(
+        [
+            [float(lookup[(overlap, fraction)].recovered) for fraction in fractions]
+            for overlap in overlaps
+        ]
+    )
+    overlap_error = np.array(
+        [
+            [
+                lookup[
+                    (overlap, fraction)
+                ].normalized_overlap_correspondence_rmse
+                for fraction in fractions
+            ]
+            for overlap in overlaps
+        ]
+    )
+
+    figure, axes = plt.subplots(
+        2,
+        2,
+        figsize=(13, 9),
+        constrained_layout=True,
+    )
+    figure.suptitle(
+        "Trim-Fraction Sensitivity and Correspondence Diagnostics",
+        fontsize=15,
+        fontweight="bold",
+    )
+
+    recovery_axis = axes[0, 0]
+    recovery_image = recovery_axis.imshow(
+        recovery,
+        vmin=0.0,
+        vmax=1.0,
+        cmap="RdYlGn",
+        aspect="auto",
+    )
+    for row_index, overlap in enumerate(overlaps):
+        for column_index, fraction in enumerate(fractions):
+            recovered = bool(recovery[row_index, column_index])
+            recovery_axis.text(
+                column_index,
+                row_index,
+                "Yes" if recovered else "No",
+                ha="center",
+                va="center",
+                fontsize=8,
+                color="black" if recovered else "white",
+            )
+    recovery_axis.set(
+        title="Controlled transform recovery",
+        xlabel="Retained correspondence fraction",
+        ylabel="Actual scan overlap",
+        xticks=np.arange(len(fractions)),
+        xticklabels=[f"{fraction:.1f}" for fraction in fractions],
+        yticks=np.arange(len(overlaps)),
+        yticklabels=[f"{overlap:.0%}" for overlap in overlaps],
+    )
+    figure.colorbar(
+        recovery_image,
+        ax=recovery_axis,
+        ticks=[0.0, 1.0],
+        label="Recovery flag",
+    )
+
+    error_axis = axes[0, 1]
+    log_error = np.log10(np.maximum(overlap_error, 1e-12))
+    error_image = error_axis.imshow(
+        log_error,
+        cmap="magma",
+        aspect="auto",
+    )
+    for row_index in range(len(overlaps)):
+        for column_index in range(len(fractions)):
+            value = overlap_error[row_index, column_index]
+            label = "<0.001" if value < 0.001 else f"{value:.2f}"
+            error_axis.text(
+                column_index,
+                row_index,
+                label,
+                ha="center",
+                va="center",
+                fontsize=8,
+                color="white",
+            )
+    error_axis.set(
+        title="Known-overlap RMSE / median spacing",
+        xlabel="Retained correspondence fraction",
+        ylabel="Actual scan overlap",
+        xticks=np.arange(len(fractions)),
+        xticklabels=[f"{fraction:.1f}" for fraction in fractions],
+        yticks=np.arange(len(overlaps)),
+        yticklabels=[f"{overlap:.0%}" for overlap in overlaps],
+    )
+    figure.colorbar(
+        error_image,
+        ax=error_axis,
+        label="log10 normalized RMSE",
+    )
+
+    diagnostic_specs = [
+        (
+            axes[1, 0],
+            "correct_match_precision",
+            "Correct retained-pair precision",
+            "Correct retained pairs / all retained pairs",
+        ),
+        (
+            axes[1, 1],
+            "correct_match_recall",
+            "Correct overlap-pair recall",
+            "Correct retained pairs / known overlap pairs",
+        ),
+    ]
+    colors = plt.cm.viridis(np.linspace(0.1, 0.9, len(overlaps)))
+    for axis, field, title, ylabel in diagnostic_specs:
+        for overlap, color in zip(overlaps, colors):
+            values = [
+                getattr(lookup[(overlap, fraction)], field)
+                for fraction in fractions
+            ]
+            axis.plot(
+                fractions,
+                values,
+                marker="o",
+                color=color,
+                label=f"{overlap:.0%} overlap",
+            )
+        axis.set(
+            title=title,
+            xlabel="Retained correspondence fraction",
+            ylabel=ylabel,
+            xticks=fractions,
+            ylim=(-0.03, 1.03),
+        )
+        axis.grid(alpha=0.25)
+        axis.legend(fontsize=8, loc="best")
 
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)

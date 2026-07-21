@@ -19,6 +19,8 @@ and must not be combined into a single ranking.
 | `registration` | `usgs_3dep_iowa` | 4 | `recovered=2/4` | `recovery_rate` = 50.0% | `largest_recovered_angle_deg` = 5.000° |
 | `partial_overlap_registration` | `synthetic` | 8 | `trim_fraction=0.7` | `trimmed_recovery_rate` = 50.0% | `all_pairs_recovery_rate` = 25.0% |
 | `partial_overlap_registration` | `usgs_3dep_iowa` | 8 | `trim_fraction=0.7` | `trimmed_recovery_rate` = 50.0% | `all_pairs_recovery_rate` = 25.0% |
+| `trim_sensitivity` | `synthetic` | 28 | `trim_fraction=0.4` | `recovery_rate` = 100.0% | `mean_correct_match_precision` = 100.0% |
+| `trim_sensitivity` | `usgs_3dep_iowa` | 28 | `trim_fraction=0.4` | `recovery_rate` = 100.0% | `mean_correct_match_precision` = 100.0% |
 
 ## Selection Rules and Evidence Scope
 
@@ -32,6 +34,8 @@ and must not be combined into a single ranking.
 - `registration/usgs_3dep_iowa`: Converged with known-pair RMSE no greater than 0.01 times spacing. Evidence scope: Known rigid transform and one-to-one correspondences. Source: `registration/usgs_3dep_iowa/metrics.csv`.
 - `partial_overlap_registration/synthetic`: Compare a fixed trimmed fraction with all-pairs ICP across the same overlap sweep. Evidence scope: Known transform and known correspondences in the overlap. Source: `partial_overlap_registration/synthetic/metrics.csv`.
 - `partial_overlap_registration/usgs_3dep_iowa`: Compare a fixed trimmed fraction with all-pairs ICP across the same overlap sweep. Evidence scope: Known transform and known correspondences in the overlap. Source: `partial_overlap_registration/usgs_3dep_iowa/metrics.csv`.
+- `trim_sensitivity/synthetic`: Highest controlled recovery rate across the overlap sweep; ties retain more correspondences. Evidence scope: Known transform, overlap membership, and exact overlap pairs. Source: `trim_sensitivity/synthetic/metrics.csv`.
+- `trim_sensitivity/usgs_3dep_iowa`: Highest controlled recovery rate across the overlap sweep; ties retain more correspondences. Evidence scope: Known transform, overlap membership, and exact overlap pairs. Source: `trim_sensitivity/usgs_3dep_iowa/metrics.csv`.
 
 ## Interface Review
 
@@ -46,6 +50,7 @@ method-specific point-level or point-cloud outputs.
 | Normal estimation | `evaluate-normals` | `output/normal_estimation` |
 | Rigid registration | `evaluate-registration` | `output/registration` |
 | Partial-overlap registration | `evaluate-partial-overlap` | `output/partial_overlap_registration` |
+| Trim sensitivity | `evaluate-trim-sensitivity` | `output/trim_sensitivity` |
 
 The earlier `evaluate` command remains as an alias for
 `evaluate-downsampling`. Reference outputs use the canonical layout

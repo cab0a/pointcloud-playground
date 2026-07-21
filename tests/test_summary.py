@@ -21,7 +21,7 @@ def test_collect_experiment_summaries_selects_review_conditions() -> None:
         for summary in summaries
     }
 
-    assert len(summaries) == 10
+    assert len(summaries) == 12
     assert (
         by_key[("voxel_downsampling", "synthetic")].selected_condition
         == "voxel_size=0.25"
@@ -50,6 +50,10 @@ def test_collect_experiment_summaries_selects_review_conditions() -> None:
     assert partial_synthetic.selected_condition == "trim_fraction=0.7"
     assert partial_synthetic.primary_value == pytest.approx(0.5)
     assert partial_synthetic.secondary_value == pytest.approx(0.25)
+    trim_synthetic = by_key[("trim_sensitivity", "synthetic")]
+    assert trim_synthetic.selected_condition == "trim_fraction=0.4"
+    assert trim_synthetic.primary_value == pytest.approx(1.0)
+    assert trim_synthetic.secondary_value == pytest.approx(1.0)
 
 
 def test_summary_outputs_share_the_same_records(tmp_path: Path) -> None:

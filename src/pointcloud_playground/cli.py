@@ -41,6 +41,10 @@ from .summary import (
     write_experiment_summary_markdown,
 )
 from .synthetic import generate_controlled_density_cloud
+from .trim_evaluation import (
+    evaluate_trim_sensitivity,
+    write_trim_sensitivity_metrics_csv,
+)
 from .visualization import (
     save_comparison_plot,
     save_experiment_summary_plot,
@@ -48,6 +52,7 @@ from .visualization import (
     save_outlier_filtering_plot,
     save_partial_overlap_evaluation_plot,
     save_registration_evaluation_plot,
+    save_trim_sensitivity_plot,
 )
 
 
@@ -253,6 +258,58 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory for metrics, scan clouds, aligned clouds, and the figure.",
     )
 
+    trim_parser = subparsers.add_parser(
+        "evaluate-trim-sensitivity",
+        help="Evaluate trim fractions with known correspondence diagnostics.",
+    )
+    trim_parser.add_argument("input", type=Path)
+    trim_parser.add_argument(
+        "--overlap-ratios",
+        type=float,
+        nargs="+",
+        default=[1.0, 0.8, 0.6, 0.4],
+        metavar="RATIO",
+        help="Requested overlap ratios for paired left and right scans.",
+    )
+    trim_parser.add_argument(
+        "--trim-fractions",
+        type=float,
+        nargs="+",
+        default=[0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+        metavar="FRACTION",
+        help="Retained closest-correspondence fractions to evaluate.",
+    )
+    trim_parser.add_argument(
+        "--angle",
+        type=float,
+        default=2.0,
+        help="Initial source rotation in degrees.",
+    )
+    trim_parser.add_argument(
+        "--translation-scale",
+        type=float,
+        default=0.5,
+        help="Initial translation relative to median point spacing.",
+    )
+    trim_parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=80,
+        help="Maximum ICP iterations for each sensitivity condition.",
+    )
+    trim_parser.add_argument(
+        "--tolerance-scale",
+        type=float,
+        default=1e-6,
+        help="Convergence tolerance relative to median point spacing.",
+    )
+    trim_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/trim_sensitivity"),
+        help="Directory for sensitivity metrics and the diagnostic figure.",
+    )
+
     summary_parser = subparsers.add_parser(
         "summarize-results",
         help="Create a cross-experiment review from canonical result files.",
@@ -448,6 +505,40 @@ def _evaluate_partial_overlap(args: argparse.Namespace) -> int:
     return 0
 
 
+def _evaluate_trim_sensitivity(args: argparse.Namespace) -> int:
+    points = load_xyz(args.input)
+    results = evaluate_trim_sensitivity(
+        points,
+        args.overlap_ratios,
+        args.trim_fractions,
+        angle_deg=args.angle,
+        translation_scale=args.translation_scale,
+        max_iterations=args.max_iterations,
+        tolerance_scale=args.tolerance_scale,
+    )
+    metrics_path = write_trim_sensitivity_metrics_csv(
+        args.output_dir / "metrics.csv",
+        results,
+    )
+    comparison_path = save_trim_sensitivity_plot(
+        args.output_dir / "comparison.png",
+        results,
+    )
+
+    print(f"Input points: {len(points)}")
+    for result in results:
+        print(
+            f"Overlap {result.actual_overlap_ratio:.1%} | "
+            f"fraction {result.trim_fraction:.1f}: "
+            f"precision {result.correct_match_precision:.3f}, "
+            f"recall {result.correct_match_recall:.3f}, "
+            f"recovered {result.recovered}"
+        )
+    print(f"Metrics: {metrics_path}")
+    print(f"Comparison: {comparison_path}")
+    return 0
+
+
 def _summarize_results(args: argparse.Namespace) -> int:
     summaries = collect_experiment_summaries(args.results_root)
     csv_path = write_experiment_summary_csv(
@@ -488,6 +579,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _evaluate_registration(args)
         if args.command == "evaluate-partial-overlap":
             return _evaluate_partial_overlap(args)
+        if args.command == "evaluate-trim-sensitivity":
+            return _evaluate_trim_sensitivity(args)
         return _summarize_results(args)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))

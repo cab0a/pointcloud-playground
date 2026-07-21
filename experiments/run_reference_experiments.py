@@ -34,6 +34,10 @@ from pointcloud_playground.synthetic import (
     controlled_surface_normals,
     generate_controlled_density_cloud,
 )
+from pointcloud_playground.trim_evaluation import (
+    evaluate_trim_sensitivity,
+    write_trim_sensitivity_metrics_csv,
+)
 from pointcloud_playground.visualization import (
     save_comparison_plot,
     save_experiment_summary_plot,
@@ -41,6 +45,7 @@ from pointcloud_playground.visualization import (
     save_outlier_filtering_plot,
     save_partial_overlap_evaluation_plot,
     save_registration_evaluation_plot,
+    save_trim_sensitivity_plot,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -151,6 +156,25 @@ def run_partial_overlap_experiment(
     )
 
 
+def run_trim_sensitivity_experiment(
+    input_path: Path,
+    output_dir: Path,
+) -> None:
+    """Run one trim-fraction sensitivity and diagnostics evaluation."""
+    points = load_xyz(input_path)
+    results = evaluate_trim_sensitivity(
+        points,
+        [1.0, 0.8, 0.6, 0.4],
+        [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+        angle_deg=2.0,
+        translation_scale=0.5,
+        max_iterations=80,
+        tolerance_scale=1e-6,
+    )
+    write_trim_sensitivity_metrics_csv(output_dir / "metrics.csv", results)
+    save_trim_sensitivity_plot(output_dir / "comparison.png", results)
+
+
 def main() -> None:
     """Generate all versioned reference experiments."""
     synthetic_path = ROOT / "data" / "synthetic_controlled_density.xyz"
@@ -205,6 +229,14 @@ def main() -> None:
             / "partial_overlap_registration"
             / "usgs_3dep_iowa"
         ),
+    )
+    run_trim_sensitivity_experiment(
+        synthetic_path,
+        ROOT / "results" / "trim_sensitivity" / "synthetic",
+    )
+    run_trim_sensitivity_experiment(
+        ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
+        ROOT / "results" / "trim_sensitivity" / "usgs_3dep_iowa",
     )
     summaries = collect_experiment_summaries(ROOT / "results")
     summary_dir = ROOT / "results" / "summary"
