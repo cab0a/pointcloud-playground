@@ -3,12 +3,24 @@
 Reproducible point-cloud experiments that connect method selection,
 implementation, quantitative evaluation, and documented interpretation.
 
-Version 0.3.0 evaluates PCA normal estimation across neighborhood sizes. It
-extends the outlier-filtering study from v0.2.0 and the voxel-downsampling
-study from v0.1.0. Every experiment uses a deterministic synthetic surface and
-a traceable public USGS 3DEP lidar sample.
+Version 0.4.0 evaluates point-to-point ICP under known rigid transforms. It
+extends the normal-estimation study from v0.3.0, the outlier-filtering study
+from v0.2.0, and the voxel-downsampling study from v0.1.0. Every experiment
+uses a deterministic synthetic surface and a traceable public USGS 3DEP lidar
+sample.
 
 ## Research Questions
+
+### Rigid registration
+
+How does the magnitude of a known initial rotation and translation affect
+point-to-point ICP recovery within a fixed iteration budget?
+
+The working hypothesis is that small misalignments will recover the known
+source-to-target transform, while larger misalignments will require more
+iterations and eventually exceed the fixed budget. Nearest-neighbor RMSE is
+also expected to understate alignment error when ICP settles on incorrect
+correspondences.
 
 ### Normal estimation
 
@@ -41,6 +53,11 @@ points and their nearest retained representation.
 
 ## Features
 
+- Point-to-point ICP implemented with SciPy nearest-neighbor search and NumPy
+  rigid least-squares alignment
+- Controlled axis-angle rotations and spacing-relative translations
+- Rotation, translation, known-correspondence, and nearest-neighbor errors
+- Fixed-budget convergence diagnostics across increasing initial offsets
 - Batched local PCA normal estimation across configurable neighborhood sizes
 - Analytic normal ground truth for the controlled synthetic surface
 - Sign-invariant angular accuracy and perturbation-repeatability metrics
@@ -65,19 +82,23 @@ cd pointcloud-playground
 python -m pip install -e .
 
 pointcloud-playground generate-demo demo.xyz
-pointcloud-playground evaluate-normals demo.xyz \
-  --output-dir output/normals
+pointcloud-playground evaluate-registration demo.xyz \
+  --output-dir output/registration
 ```
 
-The normal evaluation writes:
+The registration evaluation writes:
 
 ```text
-output/normals/
+output/registration/
+├── case_01_aligned.xyz
+├── case_01_source.xyz
+├── case_02_aligned.xyz
+├── case_02_source.xyz
+├── case_03_aligned.xyz
+├── case_03_source.xyz
+├── case_04_aligned.xyz
+├── case_04_source.xyz
 ├── comparison.png
-├── normals_k8.csv
-├── normals_k16.csv
-├── normals_k32.csv
-├── normals_k64.csv
 └── metrics.csv
 ```
 
@@ -87,6 +108,17 @@ Generate a repeatable synthetic surface with uneven point density:
 
 ```bash
 pointcloud-playground generate-demo demo.xyz --points 6000 --seed 42
+```
+
+Evaluate ICP recovery across controlled rigid transforms:
+
+```bash
+pointcloud-playground evaluate-registration demo.xyz \
+  --angles 2 5 10 20 \
+  --translation-scales 0.5 1 2 4 \
+  --max-iterations 60 \
+  --tolerance-scale 1e-6 \
+  --output-dir output/registration
 ```
 
 Evaluate PCA normals under a controlled coordinate perturbation:
@@ -141,6 +173,33 @@ python experiments/prepare_public_sample.py
 ```
 
 ## Methodology
+
+### Controlled rigid registration
+
+The input cloud is the registration target. A source cloud is created by
+rotating the target around its centroid about the fixed axis `(0.3, -0.2, 1)`
+and translating it in the fixed direction `(0.7, -0.4, 0.2)`. Direction
+vectors are normalized before use. Translation magnitudes are defined relative
+to each input's median nearest-neighbor spacing:
+
+| Case | Initial rotation | Translation magnitude |
+| --- | ---: | ---: |
+| `case_01` | 2° | 0.5 × median spacing |
+| `case_02` | 5° | 1 × median spacing |
+| `case_03` | 10° | 2 × median spacing |
+| `case_04` | 20° | 4 × median spacing |
+
+Point-to-point ICP starts from the identity transform. Each iteration finds
+one nearest target point for every current source point, estimates the rigid
+least-squares transform with SVD, applies it, and composes it with the running
+estimate. The maximum is 60 iterations, and convergence is declared when the
+nearest-neighbor RMSE changes by no more than `1e-6 × median spacing`.
+
+Because every source point was generated from a target point, the inverse
+rotation and translation are known. This permits direct transform error and
+known-correspondence RMSE measurements in addition to the objective used by
+ICP. Numerical convergence means only that the stopping condition was met; it
+does not prove correct registration.
 
 ### PCA normal estimation
 
@@ -210,6 +269,11 @@ occupied voxel is represented by the centroid of its points.
 
 | Metric | Definition | Interpretation |
 | --- | --- | --- |
+| Rotation error | Angle of the residual rotation between estimated and known transforms | Orientation recovery |
+| Translation error | Euclidean distance between estimated and known translation vectors | Position recovery in input units |
+| Known-pair RMSE | RMSE between aligned source points and their generating target points | Ground-truth alignment error |
+| Nearest-neighbor RMSE | RMSE from aligned source points to their nearest target points | ICP objective, which can accept incorrect pairs |
+| Normalized error | Error divided by median point spacing | Scale-relative comparison between datasets |
 | Reference angular error | Sign-invariant angle to an analytic reference normal | Accuracy on the controlled synthetic surface |
 | Repeatability error | Angle between normals before and after controlled perturbation | Sensitivity to small coordinate changes |
 | Neighborhood radius | Distance to the kth nearest point | Spatial support of the local estimate |
@@ -226,6 +290,48 @@ occupied voxel is represented by the centroid of its points.
 All coordinates and distances use the units of the input XYZ file.
 
 ## Evaluation
+
+### Rigid registration: synthetic surface
+
+The synthetic cloud has a median point spacing of 0.107 units. ICP exactly
+recovers the first three controlled transforms within the 60-iteration budget.
+The 20-degree case reaches the budget with residual transform error.
+
+| Rotation / translation | Iterations | Converged in budget | Rotation error | Translation error / spacing | Known-pair RMSE / spacing | NN RMSE / spacing |
+| --- | ---: | :---: | ---: | ---: | ---: | ---: |
+| 2° / 0.5× | 8 | Yes | <0.001° | <0.001 | <0.001 | <0.001 |
+| 5° / 1× | 28 | Yes | <0.001° | <0.001 | <0.001 | <0.001 |
+| 10° / 2× | 48 | Yes | <0.001° | <0.001 | <0.001 | <0.001 |
+| 20° / 4× | 60 | No | 1.892° | 0.585 | 2.183 | 1.318 |
+
+![Rigid-registration evaluation on the synthetic surface](results/registration/synthetic/comparison.png)
+
+Required iterations increase sharply with the initial offset. In the final
+case, nearest-neighbor RMSE is lower than known-pair RMSE because some source
+points are close to the wrong target points. The fixed budget therefore
+exposes both initialization sensitivity and the limits of evaluating ICP only
+with its own correspondence objective.
+
+### Rigid registration: public USGS 3DEP sample
+
+The public sample has a median point spacing of 4.929 input units. With the
+same relative transforms and iteration budget, the first two cases recover
+exactly, while the 10- and 20-degree cases remain incorrect at iteration 60.
+
+| Rotation / translation | Iterations | Converged in budget | Rotation error | Translation error / spacing | Known-pair RMSE / spacing | NN RMSE / spacing |
+| --- | ---: | :---: | ---: | ---: | ---: | ---: |
+| 2° / 0.5× | 10 | Yes | <0.001° | <0.001 | <0.001 | <0.001 |
+| 5° / 1× | 51 | Yes | <0.001° | <0.001 | <0.001 | <0.001 |
+| 10° / 2× | 60 | No | 3.372° | 6.621 | 3.528 | 1.163 |
+| 20° / 4× | 60 | No | 5.350° | 10.337 | 5.557 | 1.287 |
+
+![Rigid-registration evaluation on the USGS 3DEP sample](results/registration/usgs_3dep_iowa/comparison.png)
+
+The public terrain sample requires more iterations than the synthetic surface
+under the same spacing-relative offsets. Its failed cases also show a larger
+gap between known-pair and nearest-neighbor error. This result does not define
+a universal ICP capture range; it demonstrates that convergence behavior
+depends on geometry, sampling pattern, stopping criteria, and iteration budget.
 
 ### Normal estimation: synthetic surface
 
@@ -355,6 +461,7 @@ pointcloud-playground/
 ├── data/                         # Versioned synthetic and public samples
 ├── experiments/                  # Sample preparation and reference runs
 ├── results/
+│   ├── registration/             # v0.4 metrics and figures
 │   ├── normal_estimation/        # v0.3 metrics and figures
 │   ├── outlier_filtering/        # v0.2 metrics and figures
 │   ├── synthetic/                # v0.1 synthetic results
@@ -368,6 +475,8 @@ pointcloud-playground/
 │   ├── normal_evaluation.py
 │   ├── normals.py
 │   ├── outliers.py
+│   ├── registration.py
+│   ├── registration_evaluation.py
 │   ├── synthetic.py
 │   └── visualization.py
 ├── tests/
@@ -378,6 +487,18 @@ pointcloud-playground/
 
 ## Limitations
 
+- Registration uses complete, one-to-one transformed copies with full overlap.
+  It does not model partial overlap, outliers, missing regions, or changing
+  sampling density.
+- The ICP implementation uses all nearest-neighbor pairs without robust
+  correspondence rejection, multiscale initialization, features, or a
+  point-to-plane objective.
+- Exact recovery in this controlled setup must not be generalized to sensor
+  scans or unrelated point clouds.
+- The convergence flag reports the numerical stopping rule within the fixed
+  budget; transform error is the correctness measure for this experiment.
+- Translation-vector error depends on the coordinate origin. Normalized
+  known-pair RMSE is the more directly comparable geometric measure here.
 - Local PCA assumes that a neighborhood is adequately approximated by a plane.
   Curvature, boundaries, mixed surfaces, and non-uniform density can bias the
   estimate.
@@ -411,7 +532,6 @@ pointcloud-playground/
 
 ## Roadmap
 
-- **v0.4:** Rigid registration with measurable perturbations
 - **v0.5:** Cross-experiment summaries and interface review
 
 Each extension will keep the same pattern: define a question, control the

@@ -15,6 +15,7 @@ from .filtering_evaluation import FilteringResult
 from .io import validate_points
 from .normal_evaluation import NormalEvaluationResult
 from .outliers import OutlierMask
+from .registration_evaluation import RegistrationEvaluationResult
 
 
 def _plot_sample(points: NDArray[np.floating], limit: int) -> NDArray[np.float64]:
@@ -338,6 +339,161 @@ def save_normal_evaluation_plot(
     scale_axis.legend(
         handles + second_handles,
         labels + second_labels,
+        fontsize=8,
+        loc="best",
+    )
+
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=170)
+    plt.close(figure)
+    return output_path
+
+
+def save_registration_evaluation_plot(
+    path: str | Path,
+    target_points: NDArray[np.floating],
+    results: list[RegistrationEvaluationResult],
+    plot_limit: int = 2_000,
+) -> Path:
+    """Save hardest-case overlays and registration error curves."""
+    target = validate_points(target_points)
+    if not results:
+        raise ValueError("At least one registration result is required.")
+
+    hardest = results[-1]
+    sample_count = min(len(target), plot_limit)
+    sample_indices = np.linspace(
+        0,
+        len(target) - 1,
+        sample_count,
+        dtype=int,
+    )
+    target_sample = target[sample_indices]
+    source_sample = hardest.source_points[sample_indices]
+    aligned_sample = hardest.aligned_points[sample_indices]
+
+    figure, axes = plt.subplots(
+        1,
+        3,
+        figsize=(15, 4.8),
+        constrained_layout=True,
+    )
+    overlays = [
+        (
+            source_sample,
+            "Initial misalignment",
+            f"{hardest.angle_deg:g}° | {hardest.translation_scale:g}× spacing",
+            "#d62728",
+            "Source",
+        ),
+        (
+            aligned_sample,
+            "ICP result",
+            f"rotation error {hardest.rotation_error_deg:.3f}°",
+            "#1f77b4",
+            "Aligned",
+        ),
+    ]
+    all_xy = np.vstack((target_sample[:, :2], source_sample[:, :2]))
+    xy_min = all_xy.min(axis=0)
+    xy_max = all_xy.max(axis=0)
+    margin = np.maximum((xy_max - xy_min) * 0.03, 1e-9)
+    for axis, (points, title, subtitle, color, label) in zip(
+        axes[:2],
+        overlays,
+    ):
+        axis.scatter(
+            target_sample[:, 0],
+            target_sample[:, 1],
+            c="#9e9e9e",
+            s=3,
+            linewidths=0,
+            alpha=0.6,
+            label="Target",
+        )
+        axis.scatter(
+            points[:, 0],
+            points[:, 1],
+            c=color,
+            s=3,
+            linewidths=0,
+            alpha=0.6,
+            label=label,
+        )
+        axis.set(
+            title=f"{title}\n{subtitle}",
+            xlabel="X",
+            ylabel="Y",
+            xlim=(xy_min[0] - margin[0], xy_max[0] + margin[0]),
+            ylim=(xy_min[1] - margin[1], xy_max[1] + margin[1]),
+            aspect="equal",
+        )
+        axis.legend(fontsize=8)
+
+    labels = [
+        f"{result.angle_deg:g}°\n{result.translation_scale:g}×"
+        for result in results
+    ]
+    x_positions = np.arange(len(results))
+    rotation_values = np.maximum(
+        [result.rotation_error_deg for result in results],
+        1e-12,
+    )
+    correspondence_values = np.maximum(
+        [result.normalized_correspondence_rmse for result in results],
+        1e-12,
+    )
+    nearest_values = np.maximum(
+        [
+            result.normalized_final_nearest_neighbor_rmse
+            for result in results
+        ],
+        1e-12,
+    )
+    metric_axis = axes[2]
+    metric_axis.plot(
+        x_positions,
+        rotation_values,
+        color="#d62728",
+        marker="o",
+        label="Rotation error",
+    )
+    metric_axis.set(
+        title="Recovery error by initial offset",
+        xlabel="Rotation / translation scale",
+        ylabel="Rotation error (degrees)",
+        xticks=x_positions,
+        xticklabels=labels,
+    )
+    metric_axis.set_yscale("log")
+    metric_axis.tick_params(axis="y", labelcolor="#d62728")
+    metric_axis.grid(alpha=0.25)
+
+    rmse_axis = metric_axis.twinx()
+    rmse_axis.plot(
+        x_positions,
+        correspondence_values,
+        color="#1f77b4",
+        marker="s",
+        label="Known-pair RMSE",
+    )
+    rmse_axis.plot(
+        x_positions,
+        nearest_values,
+        color="#7f8c8d",
+        marker="s",
+        linestyle="--",
+        label="Nearest-neighbor RMSE",
+    )
+    rmse_axis.set_ylabel("RMSE / median spacing", color="#1f77b4")
+    rmse_axis.set_yscale("log")
+    rmse_axis.tick_params(axis="y", labelcolor="#1f77b4")
+    handles, legend_labels = metric_axis.get_legend_handles_labels()
+    second_handles, second_labels = rmse_axis.get_legend_handles_labels()
+    metric_axis.legend(
+        handles + second_handles,
+        legend_labels + second_labels,
         fontsize=8,
         loc="best",
     )

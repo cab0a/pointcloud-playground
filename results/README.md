@@ -24,4 +24,10 @@ The `normal_estimation` directories contain:
   surface-variation measurements across neighborhood sizes
 - `comparison.png`: sampled normal vectors and neighborhood-selection curves
 
+The `registration` directories contain:
+
+- `metrics.csv`: known-transform recovery, correspondence error, iteration,
+  and convergence measurements across initial offsets
+- `comparison.png`: hardest-case overlays and scale-normalized recovery curves
+
 Interpretation is documented in the main project README.

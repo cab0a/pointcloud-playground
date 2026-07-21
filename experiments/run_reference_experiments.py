@@ -17,6 +17,10 @@ from pointcloud_playground.normal_evaluation import (
     write_normal_metrics_csv,
 )
 from pointcloud_playground.outliers import inject_vertical_outliers
+from pointcloud_playground.registration_evaluation import (
+    evaluate_registration_cases,
+    write_registration_metrics_csv,
+)
 from pointcloud_playground.synthetic import (
     controlled_surface_normals,
     generate_controlled_density_cloud,
@@ -25,6 +29,7 @@ from pointcloud_playground.visualization import (
     save_comparison_plot,
     save_normal_evaluation_plot,
     save_outlier_filtering_plot,
+    save_registration_evaluation_plot,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +97,27 @@ def run_normal_experiment(
     )
 
 
+def run_registration_experiment(
+    input_path: Path,
+    output_dir: Path,
+) -> None:
+    """Run one controlled rigid-registration evaluation."""
+    points = load_xyz(input_path)
+    results = evaluate_registration_cases(
+        points,
+        [2.0, 5.0, 10.0, 20.0],
+        [0.5, 1.0, 2.0, 4.0],
+        max_iterations=60,
+        tolerance_scale=1e-6,
+    )
+    write_registration_metrics_csv(output_dir / "metrics.csv", results)
+    save_registration_evaluation_plot(
+        output_dir / "comparison.png",
+        points,
+        results,
+    )
+
+
 def main() -> None:
     """Generate all versioned reference experiments."""
     synthetic_path = ROOT / "data" / "synthetic_controlled_density.xyz"
@@ -125,6 +151,14 @@ def main() -> None:
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
         ROOT / "results" / "normal_estimation" / "usgs_3dep_iowa",
         reference_normals=False,
+    )
+    run_registration_experiment(
+        synthetic_path,
+        ROOT / "results" / "registration" / "synthetic",
+    )
+    run_registration_experiment(
+        ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
+        ROOT / "results" / "registration" / "usgs_3dep_iowa",
     )
 
 

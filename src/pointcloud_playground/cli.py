@@ -25,11 +25,17 @@ from .normal_evaluation import (
     write_normal_metrics_csv,
 )
 from .outliers import inject_vertical_outliers
+from .registration_evaluation import (
+    evaluate_registration_cases,
+    write_aligned_clouds,
+    write_registration_metrics_csv,
+)
 from .synthetic import generate_controlled_density_cloud
 from .visualization import (
     save_comparison_plot,
     save_normal_evaluation_plot,
     save_outlier_filtering_plot,
+    save_registration_evaluation_plot,
 )
 
 
@@ -142,6 +148,46 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("output/normals"),
         help="Directory for metrics, point-level normals, and the figure.",
     )
+
+    registration_parser = subparsers.add_parser(
+        "evaluate-registration",
+        help="Evaluate point-to-point ICP under known rigid transforms.",
+    )
+    registration_parser.add_argument("input", type=Path)
+    registration_parser.add_argument(
+        "--angles",
+        type=float,
+        nargs="+",
+        default=[2.0, 5.0, 10.0, 20.0],
+        metavar="DEG",
+        help="Paired initial rotation angles in degrees.",
+    )
+    registration_parser.add_argument(
+        "--translation-scales",
+        type=float,
+        nargs="+",
+        default=[0.5, 1.0, 2.0, 4.0],
+        metavar="SCALE",
+        help="Paired translation magnitudes relative to median spacing.",
+    )
+    registration_parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=60,
+        help="Maximum ICP iterations for each controlled case.",
+    )
+    registration_parser.add_argument(
+        "--tolerance-scale",
+        type=float,
+        default=1e-6,
+        help="Convergence tolerance relative to median point spacing.",
+    )
+    registration_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/registration"),
+        help="Directory for metrics, aligned clouds, and the figure.",
+    )
     return parser
 
 
@@ -252,6 +298,38 @@ def _evaluate_normals(args: argparse.Namespace) -> int:
     return 0
 
 
+def _evaluate_registration(args: argparse.Namespace) -> int:
+    points = load_xyz(args.input)
+    results = evaluate_registration_cases(
+        points,
+        args.angles,
+        args.translation_scales,
+        max_iterations=args.max_iterations,
+        tolerance_scale=args.tolerance_scale,
+    )
+    metrics_path = write_registration_metrics_csv(
+        args.output_dir / "metrics.csv",
+        results,
+    )
+    write_aligned_clouds(args.output_dir, results)
+    comparison_path = save_registration_evaluation_plot(
+        args.output_dir / "comparison.png",
+        points,
+        results,
+    )
+
+    print(f"Input points: {len(points)}")
+    for result in results:
+        print(
+            f"{result.case}: rotation error "
+            f"{result.rotation_error_deg:.3f} deg, "
+            f"normalized RMSE {result.normalized_correspondence_rmse:.3f}"
+        )
+    print(f"Metrics: {metrics_path}")
+    print(f"Comparison: {comparison_path}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command-line interface."""
     parser = build_parser()
@@ -263,7 +341,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _evaluate(args)
         if args.command == "evaluate-outliers":
             return _evaluate_outliers(args)
-        return _evaluate_normals(args)
+        if args.command == "evaluate-normals":
+            return _evaluate_normals(args)
+        return _evaluate_registration(args)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     return 2
