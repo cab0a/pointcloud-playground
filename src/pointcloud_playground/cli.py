@@ -24,6 +24,11 @@ from .normal_evaluation import (
     write_normal_estimates,
     write_normal_metrics_csv,
 )
+from .overlap_evaluation import (
+    evaluate_partial_overlap_cases,
+    write_partial_overlap_clouds,
+    write_partial_overlap_metrics_csv,
+)
 from .outliers import inject_vertical_outliers
 from .registration_evaluation import (
     evaluate_registration_cases,
@@ -41,6 +46,7 @@ from .visualization import (
     save_experiment_summary_plot,
     save_normal_evaluation_plot,
     save_outlier_filtering_plot,
+    save_partial_overlap_evaluation_plot,
     save_registration_evaluation_plot,
 )
 
@@ -195,6 +201,56 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("output/registration"),
         help="Directory for metrics, aligned clouds, and the figure.",
+    )
+
+    overlap_parser = subparsers.add_parser(
+        "evaluate-partial-overlap",
+        help="Compare all-pairs and trimmed ICP across scan overlap levels.",
+    )
+    overlap_parser.add_argument("input", type=Path)
+    overlap_parser.add_argument(
+        "--overlap-ratios",
+        type=float,
+        nargs="+",
+        default=[1.0, 0.8, 0.6, 0.4],
+        metavar="RATIO",
+        help="Requested overlap ratios for paired left and right scans.",
+    )
+    overlap_parser.add_argument(
+        "--angle",
+        type=float,
+        default=2.0,
+        help="Initial source rotation in degrees.",
+    )
+    overlap_parser.add_argument(
+        "--translation-scale",
+        type=float,
+        default=0.5,
+        help="Initial translation relative to median point spacing.",
+    )
+    overlap_parser.add_argument(
+        "--trim-fraction",
+        type=float,
+        default=0.7,
+        help="Closest source-correspondence fraction retained by trimmed ICP.",
+    )
+    overlap_parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=80,
+        help="Maximum ICP iterations for each method and overlap level.",
+    )
+    overlap_parser.add_argument(
+        "--tolerance-scale",
+        type=float,
+        default=1e-6,
+        help="Convergence tolerance relative to median point spacing.",
+    )
+    overlap_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/partial_overlap_registration"),
+        help="Directory for metrics, scan clouds, aligned clouds, and the figure.",
     )
 
     summary_parser = subparsers.add_parser(
@@ -357,6 +413,41 @@ def _evaluate_registration(args: argparse.Namespace) -> int:
     return 0
 
 
+def _evaluate_partial_overlap(args: argparse.Namespace) -> int:
+    points = load_xyz(args.input)
+    results = evaluate_partial_overlap_cases(
+        points,
+        args.overlap_ratios,
+        angle_deg=args.angle,
+        translation_scale=args.translation_scale,
+        trim_fraction=args.trim_fraction,
+        max_iterations=args.max_iterations,
+        tolerance_scale=args.tolerance_scale,
+    )
+    metrics_path = write_partial_overlap_metrics_csv(
+        args.output_dir / "metrics.csv",
+        results,
+    )
+    write_partial_overlap_clouds(args.output_dir, results)
+    comparison_path = save_partial_overlap_evaluation_plot(
+        args.output_dir / "comparison.png",
+        results,
+    )
+
+    print(f"Input points: {len(points)}")
+    for result in results:
+        print(
+            f"Overlap {result.actual_overlap_ratio:.1%} | "
+            f"{result.method}: "
+            f"known-overlap RMSE "
+            f"{result.normalized_overlap_correspondence_rmse:.3f}, "
+            f"recovered {result.recovered}"
+        )
+    print(f"Metrics: {metrics_path}")
+    print(f"Comparison: {comparison_path}")
+    return 0
+
+
 def _summarize_results(args: argparse.Namespace) -> int:
     summaries = collect_experiment_summaries(args.results_root)
     csv_path = write_experiment_summary_csv(
@@ -395,6 +486,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _evaluate_normals(args)
         if args.command == "evaluate-registration":
             return _evaluate_registration(args)
+        if args.command == "evaluate-partial-overlap":
+            return _evaluate_partial_overlap(args)
         return _summarize_results(args)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))

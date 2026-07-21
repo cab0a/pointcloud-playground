@@ -3,12 +3,24 @@
 Reproducible point-cloud experiments that connect method selection,
 implementation, quantitative evaluation, and documented interpretation.
 
-Version 0.5.0 adds a cross-experiment evidence summary and reviews the public
-CLI and result layout across voxel downsampling, outlier filtering, normal
-estimation, and rigid registration. Every experiment uses a deterministic
+Version 0.6.0 adds a controlled partial-overlap registration experiment. It
+compares ordinary all-pairs ICP with a fixed-fraction trimmed variant and uses
+known overlap correspondences to distinguish correct recovery from a low but
+misleading nearest-neighbor objective. Every experiment uses a deterministic
 synthetic surface and a traceable public USGS 3DEP lidar sample.
 
 ## Research Questions
+
+### Partial-overlap registration
+
+How does decreasing scan overlap affect point-to-point ICP, and can fixed-
+fraction correspondence trimming reduce the bias introduced by non-overlapping
+regions?
+
+The working hypothesis is that all-pairs ICP will become biased as overlap
+falls, while retaining only the closest correspondences will improve recovery
+at moderate overlap. A fixed trim fraction is also expected to reach a limit
+as the true overlap becomes smaller than the retained fraction.
 
 ### Cross-experiment review
 
@@ -62,6 +74,10 @@ points and their nearest retained representation.
 
 ## Features
 
+- Controlled equal-size scan pairs with 100%, 80%, 60%, and 40% overlap
+- All-pairs ICP compared with ICP retaining the closest 70% of correspondences
+- Known-overlap, all-source nearest-neighbor, and transform-recovery metrics
+- Scale-normalized error curves and aligned XYZ outputs for each overlap case
 - Cross-experiment CSV, Markdown, and visual evidence summaries
 - Explicit representative-condition rules without universal recommendations
 - Canonical `results/<experiment>/<dataset>/` reference layout
@@ -96,17 +112,20 @@ cd pointcloud-playground
 python -m pip install -e .
 
 pointcloud-playground generate-demo demo.xyz
-pointcloud-playground summarize-results results \
-  --output-dir output/summary
+pointcloud-playground evaluate-partial-overlap demo.xyz \
+  --output-dir output/partial_overlap_registration
 ```
 
-The cross-experiment review writes:
+The partial-overlap evaluation writes:
 
 ```text
-output/summary/
+output/partial_overlap_registration/
 ├── comparison.png
-├── experiment_summary.csv
-└── README.md
+├── metrics.csv
+├── case_01_target.xyz
+├── case_01_source.xyz
+├── case_01_all_pairs_aligned.xyz
+└── case_01_trimmed_aligned.xyz
 ```
 
 ## Usage
@@ -122,6 +141,19 @@ Generate a repeatable synthetic surface with uneven point density:
 
 ```bash
 pointcloud-playground generate-demo demo.xyz --points 6000 --seed 42
+```
+
+Compare all-pairs and trimmed ICP across controlled scan overlap:
+
+```bash
+pointcloud-playground evaluate-partial-overlap demo.xyz \
+  --overlap-ratios 1.0 0.8 0.6 0.4 \
+  --angle 2 \
+  --translation-scale 0.5 \
+  --trim-fraction 0.7 \
+  --max-iterations 80 \
+  --tolerance-scale 1e-6 \
+  --output-dir output/partial_overlap_registration
 ```
 
 Evaluate ICP recovery across controlled rigid transforms:
@@ -188,7 +220,7 @@ python experiments/prepare_public_sample.py
 
 ### CLI and output contract
 
-All four evaluation commands take one positional XYZ input, accept
+All five evaluation commands take one positional XYZ input, accept
 `--output-dir`, and write `metrics.csv` plus `comparison.png`. Method-specific
 point clouds, labels, or point-level estimates are additional outputs.
 
@@ -198,6 +230,7 @@ point clouds, labels, or point-level estimates are additional outputs.
 | Outlier filtering | `evaluate-outliers` | `output/outlier_filtering` |
 | Normal estimation | `evaluate-normals` | `output/normal_estimation` |
 | Rigid registration | `evaluate-registration` | `output/registration` |
+| Partial-overlap registration | `evaluate-partial-overlap` | `output/partial_overlap_registration` |
 
 The earlier `evaluate` command remains available as an alias for
 `evaluate-downsampling`.
@@ -206,7 +239,7 @@ The earlier `evaluate` command remains available as an alias for
 
 ### Cross-experiment summary
 
-The summary reads the eight committed `metrics.csv` files from four
+The summary reads the ten committed `metrics.csv` files from five
 experiments and two datasets. Each row uses the same schema: experiment,
 dataset, number of evaluated conditions, selected condition, selection rule,
 primary evidence, secondary evidence, evidence scope, and source path.
@@ -220,10 +253,40 @@ One representative condition is selected per experiment and dataset:
 | Normal estimation, synthetic | Lowest mean error against analytic reference normals |
 | Normal estimation, public | Lowest median perturbation error, reported as stability rather than accuracy |
 | Rigid registration | Fraction converged with known-pair RMSE no greater than 0.01 times median spacing |
+| Partial-overlap registration | Recovery rates for fixed 70% trimming and all-pairs ICP across the same overlap sweep |
 
 The summary deliberately does not create a combined score. F1, angular error,
 coverage, and transform recovery describe different questions and cannot be
 ranked on a shared quality axis.
+
+### Controlled partial-overlap registration
+
+The input cloud is ordered by X to create two equal-size, partially overlapping
+scans. The target takes points from the low-X end and the source reference takes
+points from the high-X end. For a requested overlap ratio `r`, the approximate
+number of points in each scan is:
+
+```text
+scan points = total points / (2 - r)
+actual overlap = shared points / scan points
+```
+
+Integer rounding is reported through `actual_overlap_ratio`. The source scan
+is then rotated by 2 degrees and translated by half the full cloud's median
+point spacing. This deliberately modest initialization allows the experiment
+to focus on overlap rather than the capture-range boundary measured in v0.4.
+
+Two correspondence policies are evaluated under the same 80-iteration budget:
+
+- **All-pairs ICP:** use the nearest target point for every source point.
+- **Trimmed ICP:** retain the closest 70% of source-to-target pairs in each
+  iteration before estimating the rigid transform.
+
+The 70% fraction is a fixed study condition, not a tuned optimum. Because the
+shared points retain their indices in both scans, the inverse transform and
+the correct correspondences within the overlap are known. A case is counted as
+recovered only when it converges and its known-overlap RMSE is no greater than
+1% of median spacing.
 
 ### Controlled rigid registration
 
@@ -324,6 +387,10 @@ occupied voxel is represented by the centroid of its points.
 | Translation error | Euclidean distance between estimated and known translation vectors | Position recovery in input units |
 | Known-pair RMSE | RMSE between aligned source points and their generating target points | Ground-truth alignment error |
 | Nearest-neighbor RMSE | RMSE from aligned source points to their nearest target points | ICP objective, which can accept incorrect pairs |
+| Retained-pair objective RMSE | Nearest-neighbor RMSE over the correspondences retained by the selected policy | Optimization objective for all-pairs or trimmed ICP |
+| Known-overlap RMSE | RMSE over shared source-target pairs only | Ground-truth alignment error under partial overlap |
+| All-source nearest-neighbor RMSE | RMSE from every aligned source point to its nearest target point | Includes source-only regions with no correct target counterpart |
+| Recovery rate | Recovered cases / evaluated cases | Controlled success frequency under the stated sweep and criterion |
 | Normalized error | Error divided by median point spacing | Scale-relative comparison between datasets |
 | Reference angular error | Sign-invariant angle to an analytic reference normal | Accuracy on the controlled synthetic surface |
 | Repeatability error | Angle between normals before and after controlled perturbation | Sensitivity to small coordinate changes |
@@ -344,7 +411,7 @@ All coordinates and distances use the units of the input XYZ file.
 
 ### Cross-experiment evidence snapshot
 
-The v0.5 review contains eight summary records. The table shows the selected
+The v0.6 review contains ten summary records. The table shows the selected
 review condition and its primary evidence; each row retains its own selection
 rule and evidence scope in
 [`results/summary/README.md`](results/summary/README.md).
@@ -355,6 +422,7 @@ rule and evidence scope in
 | Outlier filtering | Ratio 1.5: F1 0.934 | Ratio 2.0: F1 0.914 |
 | Normal estimation | k=64: mean reference error 0.846° | k=64: median repeatability error 0.091° |
 | Rigid registration | 3/4 recovered; largest angle 10° | 2/4 recovered; largest angle 5° |
+| Partial overlap | Trimmed 2/4 recovered; all-pairs 1/4 | Trimmed 2/4 recovered; all-pairs 1/4 |
 
 ![Cross-experiment evidence snapshot](results/summary/comparison.png)
 
@@ -362,8 +430,53 @@ The summary makes three important boundaries visible. The outlier threshold
 selected by F1 changes between datasets. The public normal result describes
 repeatability rather than accuracy because no reference normals exist. The
 registration recovery rate is lower for the public sample under the same
-spacing-relative offsets and iteration budget. These observations remain
-method-specific evidence, not an overall dataset or algorithm ranking.
+spacing-relative offsets and iteration budget. The partial-overlap comparison
+shows the same recovery boundary on both reference datasets, but that does not
+establish a universal trim fraction. These observations remain method-specific
+evidence, not an overall dataset or algorithm ranking.
+
+### Partial overlap: synthetic surface
+
+Both methods recover the known transform at full overlap. At 80% overlap,
+all-pairs ICP is pulled away from the correct transform by source-only points,
+while the fixed 70% trimmed policy still recovers. At 60% and 40%, neither
+method meets the recovery criterion within 80 iterations.
+
+| Actual overlap | All-pairs recovered | All-pairs overlap RMSE / spacing | Trimmed recovered | Trimmed overlap RMSE / spacing | Trimmed all-source NN RMSE / spacing |
+| ---: | :---: | ---: | :---: | ---: | ---: |
+| 100% | Yes | <0.001 | Yes | <0.001 | <0.001 |
+| 80% | No | 37.780 | Yes | <0.001 | 12.539 |
+| 60% | No | 76.407 | No | 9.993 | 20.513 |
+| 40% | No | 84.806 | No | 26.394 | 19.491 |
+
+![Partial-overlap registration on the synthetic surface](results/partial_overlap_registration/synthetic/comparison.png)
+
+The exact 80% recovery has a high all-source nearest-neighbor RMSE because the
+source-only region has no valid counterpart in the target. This is expected,
+not contradictory: the known-overlap RMSE measures transform recovery, while
+the all-source metric also measures unavoidable non-overlap distance.
+
+### Partial overlap: public USGS 3DEP sample
+
+The public sample shows the same qualitative boundary under the controlled
+protocol: both methods recover at 100%, only trimmed ICP recovers at 80%, and
+neither recovers at 60% or 40%.
+
+| Actual overlap | All-pairs recovered | All-pairs overlap RMSE / spacing | Trimmed recovered | Trimmed overlap RMSE / spacing | Trimmed all-source NN RMSE / spacing |
+| ---: | :---: | ---: | :---: | ---: | ---: |
+| 100% | Yes | <0.001 | Yes | <0.001 | <0.001 |
+| 80% | No | 21.659 | Yes | <0.001 | 6.281 |
+| 60% | No | 38.882 | No | 9.408 | 10.357 |
+| 40% | No | 51.290 | No | 25.680 | 9.075 |
+
+![Partial-overlap registration on the USGS 3DEP sample](results/partial_overlap_registration/usgs_3dep_iowa/comparison.png)
+
+Trimming reduces known-overlap error at every incomplete-overlap condition,
+but improvement is not equivalent to correct recovery. The fixed 70% policy
+cannot reject enough unmatched pairs once true overlap falls to 60% or below,
+and residual ordering can still retain incorrect pairs. The comparison
+therefore supports trimming as a controlled mitigation, not as a generally
+robust registration solution.
 
 ### Rigid registration: synthetic surface
 
@@ -535,7 +648,8 @@ pointcloud-playground/
 ├── data/                         # Versioned synthetic and public samples
 ├── experiments/                  # Sample preparation and reference runs
 ├── results/
-│   ├── summary/                  # v0.5 cross-experiment review
+│   ├── summary/                  # v0.6 cross-experiment review
+│   ├── partial_overlap_registration/ # v0.6 metrics and figures
 │   ├── registration/             # v0.4 metrics and figures
 │   ├── normal_estimation/        # v0.3 metrics and figures
 │   ├── outlier_filtering/        # v0.2 metrics and figures
@@ -549,6 +663,7 @@ pointcloud-playground/
 │   ├── normal_evaluation.py
 │   ├── normals.py
 │   ├── outliers.py
+│   ├── overlap_evaluation.py
 │   ├── registration.py
 │   ├── registration_evaluation.py
 │   ├── summary.py
@@ -570,12 +685,20 @@ pointcloud-playground/
   general.
 - The two datasets share an experiment protocol but not the same coordinate
   scale, sampling pattern, geometry, or ground-truth coverage.
-- Registration uses complete, one-to-one transformed copies with full overlap.
-  It does not model partial overlap, outliers, missing regions, or changing
-  sampling density.
-- The ICP implementation uses all nearest-neighbor pairs without robust
-  correspondence rejection, multiscale initialization, features, or a
-  point-to-plane objective.
+- The v0.4 registration sweep uses complete, one-to-one transformed copies.
+  Its recovery boundary measures initialization sensitivity under full overlap.
+- Partial overlap is simulated with X-ordered slabs from one cloud. It does not
+  model viewpoint-dependent visibility, occlusion, range noise, independently
+  sampled scans, or real sensor trajectories.
+- Exact overlap pairs are available only because the scans are derived from one
+  indexed cloud. Production registration normally has no such ground truth.
+- The 70% trim fraction is a fixed comparison condition, not a recommended or
+  optimized parameter. Closest-residual trimming can discard correct pairs or
+  retain incorrect pairs, especially when actual overlap is lower than the
+  retained fraction.
+- The ICP implementation has no distance threshold, reciprocal matching,
+  multiscale initialization, geometric features, robust loss, or point-to-plane
+  objective.
 - Exact recovery in this controlled setup must not be generalized to sensor
   scans or unrelated point clouds.
 - The convergence flag reports the numerical stopping rule within the fixed
@@ -615,7 +738,8 @@ pointcloud-playground/
 
 ## Roadmap
 
-- **v0.6:** Controlled partial-overlap registration and correspondence review
+- **v0.7:** Trim-fraction sensitivity and correspondence diagnostics under
+  controlled partial overlap
 
 Each extension will keep the same pattern: define a question, control the
 input, implement the method, evaluate the result, and document limitations.

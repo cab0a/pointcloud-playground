@@ -17,6 +17,10 @@ from pointcloud_playground.normal_evaluation import (
     write_normal_metrics_csv,
 )
 from pointcloud_playground.outliers import inject_vertical_outliers
+from pointcloud_playground.overlap_evaluation import (
+    evaluate_partial_overlap_cases,
+    write_partial_overlap_metrics_csv,
+)
 from pointcloud_playground.registration_evaluation import (
     evaluate_registration_cases,
     write_registration_metrics_csv,
@@ -35,6 +39,7 @@ from pointcloud_playground.visualization import (
     save_experiment_summary_plot,
     save_normal_evaluation_plot,
     save_outlier_filtering_plot,
+    save_partial_overlap_evaluation_plot,
     save_registration_evaluation_plot,
 )
 
@@ -124,6 +129,28 @@ def run_registration_experiment(
     )
 
 
+def run_partial_overlap_experiment(
+    input_path: Path,
+    output_dir: Path,
+) -> None:
+    """Run one controlled partial-overlap registration evaluation."""
+    points = load_xyz(input_path)
+    results = evaluate_partial_overlap_cases(
+        points,
+        [1.0, 0.8, 0.6, 0.4],
+        angle_deg=2.0,
+        translation_scale=0.5,
+        trim_fraction=0.7,
+        max_iterations=80,
+        tolerance_scale=1e-6,
+    )
+    write_partial_overlap_metrics_csv(output_dir / "metrics.csv", results)
+    save_partial_overlap_evaluation_plot(
+        output_dir / "comparison.png",
+        results,
+    )
+
+
 def main() -> None:
     """Generate all versioned reference experiments."""
     synthetic_path = ROOT / "data" / "synthetic_controlled_density.xyz"
@@ -165,6 +192,19 @@ def main() -> None:
     run_registration_experiment(
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
         ROOT / "results" / "registration" / "usgs_3dep_iowa",
+    )
+    run_partial_overlap_experiment(
+        synthetic_path,
+        ROOT / "results" / "partial_overlap_registration" / "synthetic",
+    )
+    run_partial_overlap_experiment(
+        ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
+        (
+            ROOT
+            / "results"
+            / "partial_overlap_registration"
+            / "usgs_3dep_iowa"
+        ),
     )
     summaries = collect_experiment_summaries(ROOT / "results")
     summary_dir = ROOT / "results" / "summary"

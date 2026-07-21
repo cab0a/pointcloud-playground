@@ -73,7 +73,8 @@ class RegistrationEvaluationResult:
         }
 
 
-def _median_point_spacing(points: PointCloud) -> float:
+def median_point_spacing(points: PointCloud) -> float:
+    """Return the median positive nearest-neighbor spacing."""
     distances, _ = cKDTree(points).query(points, k=2)
     positive = distances[:, 1][distances[:, 1] > 0.0]
     if len(positive) == 0:
@@ -81,19 +82,21 @@ def _median_point_spacing(points: PointCloud) -> float:
     return float(np.median(positive))
 
 
-def _correspondence_rmse(
+def paired_rmse(
     first: PointCloud,
     second: PointCloud,
 ) -> float:
+    """Return RMSE for two point clouds with known one-to-one pairs."""
     return float(
         np.sqrt(np.mean(np.sum(np.square(first - second), axis=1)))
     )
 
 
-def _rotation_error_degrees(
+def rotation_error_degrees(
     estimated: NDArray[np.floating],
     reference: NDArray[np.floating],
 ) -> float:
+    """Return the residual angle between estimated and reference rotations."""
     relative = np.asarray(estimated) @ np.asarray(reference).T
     cosine = np.clip((np.trace(relative) - 1.0) / 2.0, -1.0, 1.0)
     return float(np.degrees(np.arccos(cosine)))
@@ -109,7 +112,7 @@ def create_controlled_misalignment(
     if not np.isfinite(translation_scale) or translation_scale < 0.0:
         raise ValueError("Translation scale must be non-negative and finite.")
 
-    median_spacing = _median_point_spacing(target)
+    median_spacing = median_point_spacing(target)
     center = target.mean(axis=0)
     forward_rotation = axis_angle_rotation(
         np.array([0.3, -0.2, 1.0]),
@@ -164,8 +167,8 @@ def evaluate_registration_cases(
             max_iterations=max_iterations,
             tolerance=median_spacing * tolerance_scale,
         )
-        initial_correspondence_rmse = _correspondence_rmse(source, target)
-        correspondence_rmse = _correspondence_rmse(
+        initial_correspondence_rmse = paired_rmse(source, target)
+        correspondence_rmse = paired_rmse(
             icp_result.aligned_points,
             target,
         )
@@ -194,7 +197,7 @@ def evaluate_registration_cases(
                 normalized_correspondence_rmse=(
                     correspondence_rmse / median_spacing
                 ),
-                rotation_error_deg=_rotation_error_degrees(
+                rotation_error_deg=rotation_error_degrees(
                     icp_result.transform.rotation,
                     known.rotation,
                 ),

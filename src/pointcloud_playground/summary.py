@@ -11,6 +11,7 @@ EXPERIMENTS = (
     "outlier_filtering",
     "normal_estimation",
     "registration",
+    "partial_overlap_registration",
 )
 DATASETS = ("synthetic", "usgs_3dep_iowa")
 
@@ -179,6 +180,50 @@ def _summarize_registration(
     )
 
 
+def _summarize_partial_overlap_registration(
+    rows: list[dict[str, str]], dataset: str
+) -> ExperimentSummary:
+    all_pairs = [row for row in rows if row.get("method") == "all_pairs"]
+    trimmed = [row for row in rows if row.get("method") == "trimmed"]
+    if not all_pairs or len(all_pairs) != len(trimmed):
+        raise ValueError(
+            "Partial-overlap metrics require paired all-pairs and trimmed rows."
+        )
+
+    def recovery_rate(method_rows: list[dict[str, str]]) -> float:
+        recovered = sum(
+            row.get("recovered", "").lower() == "true"
+            for row in method_rows
+        )
+        return recovered / len(method_rows)
+
+    trim_fractions = {
+        _number(row, "correspondence_fraction") for row in trimmed
+    }
+    if len(trim_fractions) != 1:
+        raise ValueError("Trimmed rows must use one correspondence fraction.")
+    trim_fraction = trim_fractions.pop()
+    return ExperimentSummary(
+        experiment="partial_overlap_registration",
+        dataset=dataset,
+        conditions_evaluated=len(rows),
+        selected_condition=f"trim_fraction={trim_fraction:g}",
+        selection_rule=(
+            "Compare a fixed trimmed fraction with all-pairs ICP across the "
+            "same overlap sweep"
+        ),
+        primary_metric="trimmed_recovery_rate",
+        primary_value=recovery_rate(trimmed),
+        secondary_metric="all_pairs_recovery_rate",
+        secondary_value=recovery_rate(all_pairs),
+        evidence_scope="Known transform and known correspondences in the overlap",
+        source_metrics=_metrics_source(
+            "partial_overlap_registration",
+            dataset,
+        ),
+    )
+
+
 def collect_experiment_summaries(
     results_root: str | Path,
 ) -> list[ExperimentSummary]:
@@ -189,6 +234,9 @@ def collect_experiment_summaries(
         "outlier_filtering": _summarize_outlier_filtering,
         "normal_estimation": _summarize_normal_estimation,
         "registration": _summarize_registration,
+        "partial_overlap_registration": (
+            _summarize_partial_overlap_registration
+        ),
     }
     summaries: list[ExperimentSummary] = []
     for experiment in EXPERIMENTS:
@@ -220,7 +268,13 @@ def write_experiment_summary_csv(
 
 
 def _format_value(metric: str, value: float) -> str:
-    if metric in {"retention_ratio", "f1", "inlier_retention", "recovery_rate"}:
+    percentage_metrics = {
+        "retention_ratio",
+        "f1",
+        "inlier_retention",
+        "recovery_rate",
+    }
+    if metric in percentage_metrics or metric.endswith("_recovery_rate"):
         return f"{value:.1%}"
     if metric.endswith("_deg"):
         return f"{value:.3f}°"
@@ -243,7 +297,10 @@ def write_experiment_summary_markdown(
         "",
         "## Evidence Snapshot",
         "",
-        "| Experiment | Dataset | Conditions | Selected condition | Primary evidence | Secondary evidence |",
+        (
+            "| Experiment | Dataset | Conditions | Selected condition | "
+            "Primary evidence | Secondary evidence |"
+        ),
         "| --- | --- | ---: | --- | --- | --- |",
     ]
     for summary in summaries:
@@ -286,6 +343,11 @@ def write_experiment_summary_markdown(
             "| Outlier filtering | `evaluate-outliers` | `output/outlier_filtering` |",
             "| Normal estimation | `evaluate-normals` | `output/normal_estimation` |",
             "| Rigid registration | `evaluate-registration` | `output/registration` |",
+            (
+                "| Partial-overlap registration | "
+                "`evaluate-partial-overlap` | "
+                "`output/partial_overlap_registration` |"
+            ),
             "",
             "The earlier `evaluate` command remains as an alias for",
             "`evaluate-downsampling`. Reference outputs use the canonical layout",

@@ -10,6 +10,9 @@ def test_cli_uses_consistent_default_output_directories() -> None:
         "evaluate-outliers": Path("output/outlier_filtering"),
         "evaluate-normals": Path("output/normal_estimation"),
         "evaluate-registration": Path("output/registration"),
+        "evaluate-partial-overlap": Path(
+            "output/partial_overlap_registration"
+        ),
     }
 
     for command, expected in commands.items():
@@ -123,6 +126,36 @@ def test_cli_generates_registration_evaluation_outputs(tmp_path: Path) -> None:
     assert (output_dir / "comparison.png").is_file()
     assert (output_dir / "case_01_source.xyz").is_file()
     assert (output_dir / "case_01_aligned.xyz").is_file()
+
+
+def test_cli_generates_partial_overlap_outputs(tmp_path: Path) -> None:
+    input_path = tmp_path / "demo.xyz"
+    output_dir = tmp_path / "partial_overlap"
+    assert main(["generate-demo", str(input_path), "--points", "300"]) == 0
+
+    result = main(
+        [
+            "evaluate-partial-overlap",
+            str(input_path),
+            "--overlap-ratios",
+            "1.0",
+            "0.6",
+            "--trim-fraction",
+            "0.7",
+            "--max-iterations",
+            "40",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert result == 0
+    assert (output_dir / "metrics.csv").is_file()
+    assert (output_dir / "comparison.png").is_file()
+    assert (output_dir / "case_01_target.xyz").is_file()
+    assert (output_dir / "case_01_source.xyz").is_file()
+    assert (output_dir / "case_01_all_pairs_aligned.xyz").is_file()
+    assert (output_dir / "case_01_trimmed_aligned.xyz").is_file()
 
 
 def test_cli_keeps_the_legacy_downsampling_alias(tmp_path: Path) -> None:

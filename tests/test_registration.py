@@ -59,6 +59,20 @@ def test_icp_recovers_small_rigid_transform() -> None:
     np.testing.assert_allclose(result.aligned_points, target, atol=1e-8)
 
 
+def test_trimmed_icp_uses_requested_correspondence_fraction() -> None:
+    rng = np.random.default_rng(11)
+    points = rng.normal(size=(100, 3))
+
+    result = iterative_closest_point(
+        points,
+        points,
+        correspondence_fraction=0.7,
+    )
+
+    assert result.correspondences_used == 70
+    assert result.final_rmse < 1e-12
+
+
 @pytest.mark.parametrize(
     ("max_iterations", "tolerance"),
     [(0, 1e-6), (10, 0.0)],
@@ -75,4 +89,18 @@ def test_icp_rejects_invalid_settings(
             points,
             max_iterations=max_iterations,
             tolerance=tolerance,
+        )
+
+
+@pytest.mark.parametrize("correspondence_fraction", [0.0, 1.01, float("nan")])
+def test_icp_rejects_invalid_correspondence_fraction(
+    correspondence_fraction: float,
+) -> None:
+    points = np.arange(30, dtype=np.float64).reshape(10, 3)
+
+    with pytest.raises(ValueError, match="Correspondence fraction"):
+        iterative_closest_point(
+            points,
+            points,
+            correspondence_fraction=correspondence_fraction,
         )

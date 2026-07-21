@@ -16,6 +16,7 @@ from .filtering_evaluation import FilteringResult
 from .io import validate_points
 from .normal_evaluation import NormalEvaluationResult
 from .outliers import OutlierMask
+from .overlap_evaluation import PartialOverlapEvaluationResult
 from .registration_evaluation import RegistrationEvaluationResult
 from .summary import ExperimentSummary
 
@@ -29,7 +30,13 @@ def _plot_sample(points: NDArray[np.floating], limit: int) -> NDArray[np.float64
 
 
 def _summary_value(metric: str, value: float) -> str:
-    if metric in {"retention_ratio", "f1", "inlier_retention", "recovery_rate"}:
+    percentage_metrics = {
+        "retention_ratio",
+        "f1",
+        "inlier_retention",
+        "recovery_rate",
+    }
+    if metric in percentage_metrics or metric.endswith("_recovery_rate"):
         return f"{value:.1%}"
     if metric.endswith("_deg"):
         return f"{value:.3f}°"
@@ -49,6 +56,7 @@ def save_experiment_summary_plot(
         "outlier_filtering",
         "normal_estimation",
         "registration",
+        "partial_overlap_registration",
     ]
     dataset_order = ["synthetic", "usgs_3dep_iowa"]
     experiment_titles = {
@@ -56,6 +64,7 @@ def save_experiment_summary_plot(
         "outlier_filtering": "Outlier filtering",
         "normal_estimation": "Normal estimation",
         "registration": "Rigid registration",
+        "partial_overlap_registration": "Partial overlap",
     }
     dataset_titles = {
         "synthetic": "Synthetic surface",
@@ -67,6 +76,8 @@ def save_experiment_summary_plot(
         "mean_angular_error_deg": "mean angular error",
         "median_neighborhood_radius": "median neighborhood radius",
         "median_repeatability_error_deg": "median repeatability error",
+        "trimmed_recovery_rate": "trimmed recovery rate",
+        "all_pairs_recovery_rate": "all-pairs recovery rate",
     }
     lookup = {
         (summary.experiment, summary.dataset): summary
@@ -76,7 +87,7 @@ def save_experiment_summary_plot(
     figure, axes = plt.subplots(
         len(dataset_order),
         len(experiment_order),
-        figsize=(16, 7.2),
+        figsize=(20, 7.2),
         constrained_layout=True,
         squeeze=False,
     )
@@ -637,6 +648,172 @@ def save_registration_evaluation_plot(
         fontsize=8,
         loc="best",
     )
+
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=170)
+    plt.close(figure)
+    return output_path
+
+
+def save_partial_overlap_evaluation_plot(
+    path: str | Path,
+    results: list[PartialOverlapEvaluationResult],
+    plot_limit: int = 2_000,
+) -> Path:
+    """Save lowest-overlap overlays and correspondence-error curves."""
+    if not results:
+        raise ValueError("At least one partial-overlap result is required.")
+
+    lowest_overlap = min(result.actual_overlap_ratio for result in results)
+    hardest_results = [
+        result
+        for result in results
+        if result.actual_overlap_ratio == lowest_overlap
+    ]
+    by_method = {result.method: result for result in hardest_results}
+    if set(by_method) != {"all_pairs", "trimmed"}:
+        raise ValueError("Both all-pairs and trimmed results are required.")
+
+    hardest = by_method["all_pairs"]
+    target_sample = _plot_sample(hardest.target_points, plot_limit)
+    source_sample = _plot_sample(hardest.source_points, plot_limit)
+    all_pairs_sample = _plot_sample(
+        by_method["all_pairs"].aligned_points,
+        plot_limit,
+    )
+    trimmed_sample = _plot_sample(
+        by_method["trimmed"].aligned_points,
+        plot_limit,
+    )
+    all_xy = np.vstack(
+        (
+            target_sample[:, :2],
+            source_sample[:, :2],
+            all_pairs_sample[:, :2],
+            trimmed_sample[:, :2],
+        )
+    )
+    xy_min = all_xy.min(axis=0)
+    xy_max = all_xy.max(axis=0)
+    margin = np.maximum((xy_max - xy_min) * 0.03, 1e-9)
+
+    figure, axes = plt.subplots(
+        1,
+        4,
+        figsize=(20, 5.0),
+        constrained_layout=True,
+    )
+    overlays = [
+        (
+            source_sample,
+            "Initial scans",
+            f"{lowest_overlap:.0%} overlap",
+            "#d62728",
+            "Source",
+        ),
+        (
+            all_pairs_sample,
+            "All-pairs ICP",
+            (
+                "recovered"
+                if by_method["all_pairs"].recovered
+                else "not recovered"
+            ),
+            "#1f77b4",
+            "Aligned source",
+        ),
+        (
+            trimmed_sample,
+            "Trimmed ICP",
+            (
+                "recovered"
+                if by_method["trimmed"].recovered
+                else "not recovered"
+            ),
+            "#2ca02c",
+            "Aligned source",
+        ),
+    ]
+    for axis, (points, title, subtitle, color, label) in zip(
+        axes[:3],
+        overlays,
+    ):
+        axis.scatter(
+            target_sample[:, 0],
+            target_sample[:, 1],
+            c="#9e9e9e",
+            s=3,
+            linewidths=0,
+            alpha=0.55,
+            label="Target",
+        )
+        axis.scatter(
+            points[:, 0],
+            points[:, 1],
+            c=color,
+            s=3,
+            linewidths=0,
+            alpha=0.6,
+            label=label,
+        )
+        axis.set(
+            title=f"{title}\n{subtitle}",
+            xlabel="X",
+            ylabel="Y",
+            xlim=(xy_min[0] - margin[0], xy_max[0] + margin[0]),
+            ylim=(xy_min[1] - margin[1], xy_max[1] + margin[1]),
+            aspect="equal",
+        )
+        axis.legend(fontsize=8)
+
+    metric_axis = axes[3]
+    colors = {"all_pairs": "#1f77b4", "trimmed": "#2ca02c"}
+    labels = {"all_pairs": "All pairs", "trimmed": "Trimmed"}
+    for method in ("all_pairs", "trimmed"):
+        method_results = sorted(
+            (result for result in results if result.method == method),
+            key=lambda result: result.actual_overlap_ratio,
+        )
+        overlaps = [100.0 * result.actual_overlap_ratio for result in method_results]
+        overlap_errors = np.maximum(
+            [
+                result.normalized_overlap_correspondence_rmse
+                for result in method_results
+            ],
+            1e-12,
+        )
+        all_nn_errors = np.maximum(
+            [
+                result.normalized_final_all_nearest_neighbor_rmse
+                for result in method_results
+            ],
+            1e-12,
+        )
+        metric_axis.plot(
+            overlaps,
+            overlap_errors,
+            color=colors[method],
+            marker="o",
+            label=f"{labels[method]}: known overlap",
+        )
+        metric_axis.plot(
+            overlaps,
+            all_nn_errors,
+            color=colors[method],
+            marker="s",
+            linestyle="--",
+            alpha=0.75,
+            label=f"{labels[method]}: all-source NN",
+        )
+    metric_axis.set(
+        title="Error by scan overlap",
+        xlabel="Actual overlap (%)",
+        ylabel="RMSE / median spacing",
+    )
+    metric_axis.set_yscale("log")
+    metric_axis.grid(alpha=0.25)
+    metric_axis.legend(fontsize=7, loc="best")
 
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)

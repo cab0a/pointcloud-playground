@@ -12,7 +12,7 @@ is either `synthetic` or `usgs_3dep_iowa`.
 
 The `summary` directory contains:
 
-- `experiment_summary.csv`: eight records in a shared review schema
+- `experiment_summary.csv`: ten records in a shared review schema
 - `README.md`: selection rules, evidence scope, and the CLI interface review
 - `comparison.png`: a non-ranking evidence matrix across methods and datasets
 
@@ -38,5 +38,12 @@ The `registration` directories contain:
 - `metrics.csv`: known-transform recovery, correspondence error, iteration,
   and convergence measurements across initial offsets
 - `comparison.png`: hardest-case overlays and scale-normalized recovery curves
+
+The `partial_overlap_registration` directories contain:
+
+- `metrics.csv`: overlap, correspondence-selection, convergence, and
+  known-transform recovery measurements for all-pairs and trimmed ICP
+- `comparison.png`: lowest-overlap scan overlays and scale-normalized error
+  curves across the overlap sweep
 
 Interpretation is documented in the main project README.

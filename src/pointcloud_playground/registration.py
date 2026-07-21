@@ -28,6 +28,7 @@ class ICPResult:
     aligned_points: PointCloud
     initial_rmse: float
     final_rmse: float
+    correspondences_used: int
     iterations: int
     converged: bool
 
@@ -136,8 +137,9 @@ def iterative_closest_point(
     target_points: NDArray[np.floating],
     max_iterations: int = 60,
     tolerance: float = 1e-6,
+    correspondence_fraction: float = 1.0,
 ) -> ICPResult:
-    """Align source to target with point-to-point ICP."""
+    """Align source to target with optionally trimmed point-to-point ICP."""
     source = validate_points(source_points)
     target = validate_points(target_points)
     if len(source) < 3 or len(target) < 3:
@@ -146,19 +148,44 @@ def iterative_closest_point(
         raise ValueError("Maximum iterations must be at least 1.")
     if not np.isfinite(tolerance) or tolerance <= 0.0:
         raise ValueError("Tolerance must be a positive finite number.")
+    if (
+        not np.isfinite(correspondence_fraction)
+        or correspondence_fraction <= 0.0
+        or correspondence_fraction > 1.0
+    ):
+        raise ValueError("Correspondence fraction must be in (0, 1].")
+
+    correspondences_used = min(
+        len(source),
+        max(3, int(np.ceil(len(source) * correspondence_fraction))),
+    )
+
+    def selected_indices(distances: NDArray[np.floating]) -> NDArray[np.int64]:
+        if correspondences_used == len(source):
+            return np.arange(len(source), dtype=np.int64)
+        order = np.argsort(distances, kind="stable")
+        return order[:correspondences_used]
+
+    def objective_rmse(distances: NDArray[np.floating]) -> float:
+        selected = selected_indices(distances)
+        return float(np.sqrt(np.mean(np.square(distances[selected]))))
 
     target_tree = cKDTree(target)
     current = source.copy()
     total = identity_transform()
     distances, _ = target_tree.query(current, k=1)
-    initial_rmse = float(np.sqrt(np.mean(np.square(distances))))
+    initial_rmse = objective_rmse(distances)
     previous_rmse = initial_rmse
     converged = False
     iterations = 0
 
     for iterations in range(1, max_iterations + 1):
-        _, indices = target_tree.query(current, k=1)
-        incremental = best_fit_transform(current, target[indices])
+        distances, indices = target_tree.query(current, k=1)
+        selected = selected_indices(distances)
+        incremental = best_fit_transform(
+            current[selected],
+            target[indices[selected]],
+        )
         current = apply_transform(current, incremental)
         total = RigidTransform(
             rotation=incremental.rotation @ total.rotation,
@@ -168,7 +195,7 @@ def iterative_closest_point(
             ),
         )
         distances, _ = target_tree.query(current, k=1)
-        current_rmse = float(np.sqrt(np.mean(np.square(distances))))
+        current_rmse = objective_rmse(distances)
         if abs(previous_rmse - current_rmse) <= tolerance:
             converged = True
             previous_rmse = current_rmse
@@ -180,6 +207,7 @@ def iterative_closest_point(
         aligned_points=current,
         initial_rmse=initial_rmse,
         final_rmse=previous_rmse,
+        correspondences_used=correspondences_used,
         iterations=iterations,
         converged=converged,
     )

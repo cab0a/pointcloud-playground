@@ -17,6 +17,8 @@ and must not be combined into a single ranking.
 | `normal_estimation` | `usgs_3dep_iowa` | 4 | `neighbors=64` | `median_repeatability_error_deg` = 0.091° | `median_neighborhood_radius` = 45.631 |
 | `registration` | `synthetic` | 4 | `recovered=3/4` | `recovery_rate` = 75.0% | `largest_recovered_angle_deg` = 10.000° |
 | `registration` | `usgs_3dep_iowa` | 4 | `recovered=2/4` | `recovery_rate` = 50.0% | `largest_recovered_angle_deg` = 5.000° |
+| `partial_overlap_registration` | `synthetic` | 8 | `trim_fraction=0.7` | `trimmed_recovery_rate` = 50.0% | `all_pairs_recovery_rate` = 25.0% |
+| `partial_overlap_registration` | `usgs_3dep_iowa` | 8 | `trim_fraction=0.7` | `trimmed_recovery_rate` = 50.0% | `all_pairs_recovery_rate` = 25.0% |
 
 ## Selection Rules and Evidence Scope
 
@@ -28,6 +30,8 @@ and must not be combined into a single ranking.
 - `normal_estimation/usgs_3dep_iowa`: Lowest perturbation repeatability error; stability only, not accuracy. Evidence scope: Controlled perturbation without normal ground truth. Source: `normal_estimation/usgs_3dep_iowa/metrics.csv`.
 - `registration/synthetic`: Converged with known-pair RMSE no greater than 0.01 times spacing. Evidence scope: Known rigid transform and one-to-one correspondences. Source: `registration/synthetic/metrics.csv`.
 - `registration/usgs_3dep_iowa`: Converged with known-pair RMSE no greater than 0.01 times spacing. Evidence scope: Known rigid transform and one-to-one correspondences. Source: `registration/usgs_3dep_iowa/metrics.csv`.
+- `partial_overlap_registration/synthetic`: Compare a fixed trimmed fraction with all-pairs ICP across the same overlap sweep. Evidence scope: Known transform and known correspondences in the overlap. Source: `partial_overlap_registration/synthetic/metrics.csv`.
+- `partial_overlap_registration/usgs_3dep_iowa`: Compare a fixed trimmed fraction with all-pairs ICP across the same overlap sweep. Evidence scope: Known transform and known correspondences in the overlap. Source: `partial_overlap_registration/usgs_3dep_iowa/metrics.csv`.
 
 ## Interface Review
 
@@ -41,6 +45,7 @@ method-specific point-level or point-cloud outputs.
 | Outlier filtering | `evaluate-outliers` | `output/outlier_filtering` |
 | Normal estimation | `evaluate-normals` | `output/normal_estimation` |
 | Rigid registration | `evaluate-registration` | `output/registration` |
+| Partial-overlap registration | `evaluate-partial-overlap` | `output/partial_overlap_registration` |
 
 The earlier `evaluate` command remains as an alias for
 `evaluate-downsampling`. Reference outputs use the canonical layout
