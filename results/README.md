@@ -1,10 +1,17 @@
 # Reference Results
 
 The results in this directory are generated from versioned inputs and fixed
-parameters. Reproduce all experiments with:
+parameters. Regenerate all experiments into a separate directory with:
 
 ```bash
-python experiments/run_reference_experiments.py
+python experiments/run_reference_experiments.py \
+  --output-root reproduced_results
+```
+
+Regenerate in a temporary directory and compare against this reference set:
+
+```bash
+python experiments/verify_reference_results.py
 ```
 
 Reference outputs follow `results/<experiment>/<dataset>/`, where the dataset
@@ -61,4 +68,6 @@ The `joint_sensitivity` directories contain:
 - `comparison.png`: recovery and exact-pair precision heatmaps for all-pairs,
   70% trimmed, and 40% trimmed ICP
 
-Interpretation is documented in the main project README.
+Interpretation is documented in the main project README. The numeric and
+structural comparison policy is documented in
+[`docs/reproducibility.md`](../docs/reproducibility.md).

@@ -3,12 +3,12 @@
 Reproducible point-cloud experiments that connect method selection,
 implementation, quantitative evaluation, and documented interpretation.
 
-Version 0.8.0 evaluates partial overlap and controlled source-outlier
-contamination together. Three correspondence policies are tested over a 4-by-4
-joint grid, with known transforms, exact overlap pairs, and injected-outlier
-labels separating numerical convergence from correct recovery. Every
-experiment uses a deterministic synthetic surface and a traceable public USGS
-3DEP lidar sample.
+Version 0.9.0 reviews the project as a reproducible research interface. It
+defines a focused top-level Python API, documents the CLI and data contracts,
+supports non-destructive reference regeneration, and adds an automated
+comparison of committed and regenerated evidence. The seven existing
+experiments continue to use a deterministic synthetic surface and a traceable
+public USGS 3DEP lidar sample.
 
 ## Research Questions
 
@@ -98,6 +98,10 @@ points and their nearest retained representation.
 
 ## Features
 
+- Reviewed top-level Python API for core I/O, processing, and registration
+- Documented array, XYZ, CLI, output, error, and compatibility contracts
+- Non-destructive reference generation into a caller-selected output root
+- Automated input-integrity and regenerated-artifact verification
 - Joint 4-by-4 sweep of scan overlap and source-outlier contamination
 - All-pairs ICP compared with fixed 70% and 40% retained fractions
 - Stable source labels for overlap, clean non-overlap, and injected outliers
@@ -145,6 +149,7 @@ git clone https://github.com/cab0a/pointcloud-playground.git
 cd pointcloud-playground
 python -m pip install -e .
 
+pointcloud-playground --version
 pointcloud-playground generate-demo demo.xyz
 pointcloud-playground evaluate-joint-sensitivity demo.xyz \
   --output-dir output/joint_sensitivity
@@ -264,10 +269,18 @@ pointcloud-playground evaluate-downsampling data/usgs_3dep_iowa/sample.xyz \
   --output-dir output/voxel_downsampling_usgs
 ```
 
-Reproduce all committed metrics and figures:
+Regenerate all committed metrics and figures without changing `results/`:
 
 ```bash
-python experiments/run_reference_experiments.py
+python experiments/run_reference_experiments.py \
+  --output-root reproduced_results
+```
+
+Regenerate the complete suite in a temporary directory and compare it with the
+committed evidence:
+
+```bash
+python experiments/verify_reference_results.py
 ```
 
 Rebuild the public sample from the checksum-pinned source LAZ file:
@@ -295,6 +308,32 @@ point clouds, labels, or point-level estimates are additional outputs.
 
 The earlier `evaluate` command remains available as an alias for
 `evaluate-downsampling`.
+
+### Python API
+
+The reviewed top-level API covers point-cloud validation and XYZ I/O,
+deterministic synthetic data, voxel downsampling, PCA normal estimation,
+controlled outliers, and rigid registration.
+
+```python
+from pointcloud_playground import load_xyz, voxel_downsample
+
+points = load_xyz("data/synthetic_controlled_density.xyz")
+reduced = voxel_downsample(points, voxel_size=0.5)
+```
+
+The full public-name list, data contract, examples, units, errors, and
+pre-v1.0 compatibility boundary are documented in
+[`docs/api.md`](docs/api.md).
+
+### Reproducibility contract
+
+The reference runner reads versioned inputs and accepts `--output-root`, so an
+independent run does not overwrite committed evidence. The verification script
+checks the deterministic synthetic input, the public-sample checksum, all CSV
+reports, the generated Markdown summary, and the structure and dimensions of
+every figure. Exact commands, comparison tolerances, and determinism boundaries
+are documented in [`docs/reproducibility.md`](docs/reproducibility.md).
 
 ## Methodology
 
@@ -552,6 +591,21 @@ occupied voxel is represented by the centroid of its points.
 All coordinates and distances use the units of the input XYZ file.
 
 ## Evaluation
+
+### v0.9 interface and reproducibility review
+
+The review covers the import surface, installed-version reporting, command
+names, default output directories, reference-result inventory, input
+integrity, and regeneration behavior. Unit tests enforce the reviewed public
+exports and keep runtime and package metadata versions synchronized.
+
+The complete verifier regenerates fourteen dataset-level result sets, the
+cross-experiment summary, and all diagnostic figures in a temporary directory.
+CSV values are compared with explicit floating-point tolerances; Markdown is
+compared exactly; PNG files are validated structurally because rendering bytes
+can vary across supported environments. This verifies implementation
+repeatability under the documented protocol, not independent scientific
+replication on new datasets.
 
 ### Cross-experiment evidence snapshot
 
@@ -891,9 +945,10 @@ units, point reduction becomes substantial and coverage error rises.
 ```text
 pointcloud-playground/
 ├── data/                         # Versioned synthetic and public samples
-├── experiments/                  # Sample preparation and reference runs
+├── docs/                         # API and reproducibility contracts
+├── experiments/                  # Preparation, reference runs, and verification
 ├── results/
-│   ├── summary/                  # v0.8 cross-experiment review
+│   ├── summary/                  # Cross-experiment evidence review
 │   ├── joint_sensitivity/        # v0.8 metrics and figures
 │   ├── trim_sensitivity/         # v0.7 metrics and figures
 │   ├── partial_overlap_registration/ # v0.6 metrics and figures
@@ -1007,11 +1062,19 @@ pointcloud-playground/
 - The public sample is a small, ground-only subset rather than a complete lidar
   scene, so its results must not be generalized to all 3D data.
 - Comparison figures are diagnostic projections, not full 3D viewers.
+- The verifier checks implementation repeatability for the committed inputs
+  and protocol. It is not independent scientific replication and does not
+  establish external validity.
+- PNG verification covers file inventory, validity, and dimensions rather than
+  byte identity because rendering libraries, fonts, and compression can vary.
+- Supported dependencies use minimum versions rather than one universal lock
+  file. Archival reproduction should record the interpreter and installed
+  package versions.
 
 ## Roadmap
 
-- **v0.9:** Documentation, API, and reproducibility review
-- **v1.0:** Stable public portfolio release
+- **v0.9:** Completed — documentation, API, and reproducibility review
+- **v1.0:** Planned — stable public portfolio release
 
 Each extension will keep the same pattern: define a question, control the
 input, implement the method, evaluate the result, and document limitations.

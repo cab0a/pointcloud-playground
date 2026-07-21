@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import __version__
 from .evaluation import (
     evaluate_voxel_sizes,
     write_downsampled_clouds,
@@ -66,6 +67,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pointcloud-playground",
         description="Run reproducible point-cloud processing experiments.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

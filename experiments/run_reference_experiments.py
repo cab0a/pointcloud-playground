@@ -1,5 +1,7 @@
 """Reproduce the versioned synthetic and public-data experiment outputs."""
 
+import argparse
+from collections.abc import Sequence
 from pathlib import Path
 
 from pointcloud_playground.evaluation import (
@@ -11,7 +13,7 @@ from pointcloud_playground.filtering_evaluation import (
     select_best_filtering_result,
     write_filtering_metrics_csv,
 )
-from pointcloud_playground.io import load_xyz, save_xyz
+from pointcloud_playground.io import load_xyz
 from pointcloud_playground.joint_evaluation import (
     evaluate_joint_sensitivity,
     write_joint_sensitivity_metrics_csv,
@@ -36,7 +38,6 @@ from pointcloud_playground.summary import (
 )
 from pointcloud_playground.synthetic import (
     controlled_surface_normals,
-    generate_controlled_density_cloud,
 )
 from pointcloud_playground.trim_evaluation import (
     evaluate_trim_sensitivity,
@@ -202,79 +203,77 @@ def run_joint_sensitivity_experiment(
     save_joint_sensitivity_plot(output_dir / "comparison.png", results)
 
 
-def main() -> None:
-    """Generate all versioned reference experiments."""
+def run_reference_experiments(output_root: Path) -> None:
+    """Generate all reference artifacts below ``output_root``."""
     synthetic_path = ROOT / "data" / "synthetic_controlled_density.xyz"
-    save_xyz(synthetic_path, generate_controlled_density_cloud())
     run_downsampling_experiment(
         synthetic_path,
-        ROOT / "results" / "voxel_downsampling" / "synthetic",
+        output_root / "voxel_downsampling" / "synthetic",
         [0.25, 0.5, 1.0],
     )
     run_downsampling_experiment(
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
-        ROOT / "results" / "voxel_downsampling" / "usgs_3dep_iowa",
+        output_root / "voxel_downsampling" / "usgs_3dep_iowa",
         [5.0, 10.0, 20.0],
     )
     run_outlier_experiment(
         synthetic_path,
-        ROOT / "results" / "outlier_filtering" / "synthetic",
+        output_root / "outlier_filtering" / "synthetic",
         seed=42,
     )
     run_outlier_experiment(
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
-        ROOT / "results" / "outlier_filtering" / "usgs_3dep_iowa",
+        output_root / "outlier_filtering" / "usgs_3dep_iowa",
         seed=42,
     )
     run_normal_experiment(
         synthetic_path,
-        ROOT / "results" / "normal_estimation" / "synthetic",
+        output_root / "normal_estimation" / "synthetic",
         reference_normals=True,
     )
     run_normal_experiment(
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
-        ROOT / "results" / "normal_estimation" / "usgs_3dep_iowa",
+        output_root / "normal_estimation" / "usgs_3dep_iowa",
         reference_normals=False,
     )
     run_registration_experiment(
         synthetic_path,
-        ROOT / "results" / "registration" / "synthetic",
+        output_root / "registration" / "synthetic",
     )
     run_registration_experiment(
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
-        ROOT / "results" / "registration" / "usgs_3dep_iowa",
+        output_root / "registration" / "usgs_3dep_iowa",
     )
     run_partial_overlap_experiment(
         synthetic_path,
-        ROOT / "results" / "partial_overlap_registration" / "synthetic",
+        output_root / "partial_overlap_registration" / "synthetic",
     )
     run_partial_overlap_experiment(
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
         (
-            ROOT
-            / "results"
+            output_root
             / "partial_overlap_registration"
             / "usgs_3dep_iowa"
         ),
     )
     run_trim_sensitivity_experiment(
         synthetic_path,
-        ROOT / "results" / "trim_sensitivity" / "synthetic",
+        output_root / "trim_sensitivity" / "synthetic",
     )
     run_trim_sensitivity_experiment(
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
-        ROOT / "results" / "trim_sensitivity" / "usgs_3dep_iowa",
+        output_root / "trim_sensitivity" / "usgs_3dep_iowa",
     )
     run_joint_sensitivity_experiment(
         synthetic_path,
-        ROOT / "results" / "joint_sensitivity" / "synthetic",
+        output_root / "joint_sensitivity" / "synthetic",
     )
     run_joint_sensitivity_experiment(
         ROOT / "data" / "usgs_3dep_iowa" / "sample.xyz",
-        ROOT / "results" / "joint_sensitivity" / "usgs_3dep_iowa",
+        output_root / "joint_sensitivity" / "usgs_3dep_iowa",
     )
-    summaries = collect_experiment_summaries(ROOT / "results")
-    summary_dir = ROOT / "results" / "summary"
+    summaries = collect_experiment_summaries(output_root)
+    summary_dir = output_root / "summary"
     write_experiment_summary_csv(
         summary_dir / "experiment_summary.csv",
         summaries,
@@ -286,5 +285,28 @@ def main() -> None:
     )
 
 
+def build_parser() -> argparse.ArgumentParser:
+    """Build the reference-runner argument parser."""
+    parser = argparse.ArgumentParser(
+        description="Regenerate every committed reference experiment.",
+    )
+    parser.add_argument(
+        "--output-root",
+        type=Path,
+        default=ROOT / "results",
+        help="Destination root; use a new directory for a non-destructive run.",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run every reference experiment."""
+    args = build_parser().parse_args(argv)
+    run_reference_experiments(args.output_root)
+    print("Reference experiments completed.")
+    print(f"Output root: {args.output_root}")
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

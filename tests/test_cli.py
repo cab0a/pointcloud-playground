@@ -1,6 +1,21 @@
 from pathlib import Path
 
+import pytest
+
+import pointcloud_playground
 from pointcloud_playground.cli import build_parser, main
+
+
+def test_cli_reports_the_installed_version(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["--version"])
+
+    assert exc_info.value.code == 0
+    assert capsys.readouterr().out.strip() == (
+        f"pointcloud-playground {pointcloud_playground.__version__}"
+    )
 
 
 def test_cli_uses_consistent_default_output_directories() -> None:
