@@ -1,5 +1,17 @@
 # Point Cloud Playground
 
+## 日本語概要
+
+このリポジトリは、点群のdownsampling、outlier filtering、normal estimation、
+rigid registrationを、既知の変換・対応点・ラベルを使って定量評価する実験基盤です。
+3D処理手法の挙動や失敗条件を確認したいR&Dエンジニアに役立ちます。
+
+決定論的なsynthetic dataとUSGS 3DEP由来サンプル、CLI、CSV metrics、比較図、
+再生成検証、Python 3.10〜3.14のCIを含みます。主張できる範囲と制約の詳細は
+英語本文を参照してください。
+
+---
+
 [![CI](https://github.com/cab0a/pointcloud-playground/actions/workflows/ci.yml/badge.svg)](https://github.com/cab0a/pointcloud-playground/actions/workflows/ci.yml)
 
 Evaluate point-cloud algorithms with known geometry, controlled failure
@@ -1196,15 +1208,3 @@ The source code is available under the [MIT License](LICENSE).
 The included USGS 3DEP-derived sample is public domain. Its source and
 preparation details are documented in
 [`data/usgs_3dep_iowa/README.md`](data/usgs_3dep_iowa/README.md).
-
----
-
-## 日本語概要
-
-このリポジトリは、点群のdownsampling、outlier filtering、normal estimation、
-rigid registrationを、既知の変換・対応点・ラベルを使って定量評価する実験基盤です。
-3D処理手法の挙動や失敗条件を確認したいR&Dエンジニアに役立ちます。
-
-決定論的なsynthetic dataとUSGS 3DEP由来サンプル、CLI、CSV metrics、比較図、
-再生成検証、Python 3.10〜3.14のCIを含みます。主張できる範囲と制約の詳細は
-英語本文を参照してください。
