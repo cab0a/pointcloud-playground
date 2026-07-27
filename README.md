@@ -1,7 +1,25 @@
 # Point Cloud Playground
 
-Reproducible point-cloud experiments that connect method selection,
-implementation, quantitative evaluation, and documented interpretation.
+[![CI](https://github.com/cab0a/pointcloud-playground/actions/workflows/ci.yml/badge.svg)](https://github.com/cab0a/pointcloud-playground/actions/workflows/ci.yml)
+
+Evaluate point-cloud algorithms with known geometry, controlled failure
+conditions, and reviewable CSV and image artifacts.
+
+## Overview
+
+Point Cloud Playground is an experiment suite for R&D engineers and reviewers
+who need to understand when a geometric method succeeds, where it fails, and
+which evidence supports that conclusion. It covers voxel downsampling,
+statistical outlier filtering, local PCA normals, rigid registration,
+partial-overlap registration, trim sensitivity, and the interaction between
+overlap and source contamination.
+
+The repository addresses a common review problem: a filtered or aligned point
+cloud can look plausible while its retained correspondences, transform, or
+geometric coverage are wrong. Controlled synthetic labels and known transforms
+make those errors measurable. A traceable USGS 3DEP-derived sample provides a
+separate public-data check without turning the controlled findings into a
+deployment claim.
 
 Version 1.0.0 is the stable public portfolio release. It defines a documented
 1.x compatibility policy for the top-level Python API, CLI, primary output
@@ -9,7 +27,69 @@ filenames, and existing CSV schemas. The seven experiments, deterministic
 synthetic surface, traceable public USGS 3DEP lidar sample, and committed
 reference results are unchanged from v0.9.0.
 
-## Research Questions
+## Representative Result
+
+The joint-sensitivity experiment evaluates 48 conditions per dataset: four
+overlap levels, four controlled source-outlier rates, and three
+correspondence-retention policies. The figure exposes the boundary where a
+fixed retained fraction can exceed the proportion of source points that can
+have valid target matches.
+
+![Joint overlap and outlier sensitivity](results/joint_sensitivity/synthetic/comparison.png)
+
+The corresponding numeric evidence is in
+[`results/joint_sensitivity/synthetic/metrics.csv`](results/joint_sensitivity/synthetic/metrics.csv).
+It includes correspondence composition, exact-pair precision and recall,
+outlier rejection, residuals, transform error, and recovery status.
+
+## Key Features
+
+- Seven CLI-driven experiments with consistent `metrics.csv` and
+  `comparison.png` outputs
+- Deterministic synthetic surfaces with analytic normals, known transforms,
+  exact generating pairs, overlap membership, and injected-outlier labels
+- A checksum-pinned, ground-only USGS 3DEP-derived sample with documented
+  preparation
+- NumPy/SciPy implementations for voxel reduction, neighborhood analysis,
+  statistical filtering, and point-to-point ICP
+- Scale-normalized errors and method-specific metrics rather than one combined
+  cross-method score
+- Non-destructive reference regeneration and automated artifact verification
+- Stable top-level Python API, CLI, filenames, and CSV schema boundaries for
+  the 1.x series
+- pytest, distribution builds, wheel installation checks, and CI on Python
+  3.10 through 3.14
+
+## Quick Start
+
+Use Python 3.10 or later in an isolated environment.
+On Debian or Ubuntu, install `python3-venv` if `venv` reports that `ensurepip`
+is unavailable.
+
+```bash
+git clone https://github.com/cab0a/pointcloud-playground.git
+cd pointcloud-playground
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+pointcloud-playground generate-demo demo.xyz
+pointcloud-playground evaluate-joint-sensitivity demo.xyz \
+  --output-dir output/joint_sensitivity
+```
+
+Review `output/joint_sensitivity/comparison.png` for the visual comparison and
+`output/joint_sensitivity/metrics.csv` for all evaluated conditions. The first
+command creates the deterministic input `demo.xyz`.
+
+## Generated Artifacts
+
+Every evaluation writes `metrics.csv` and `comparison.png` below its selected
+output directory. Depending on the method, it also writes aligned or filtered
+XYZ files, labels, point-level estimates, or diagnostic CSV files. The summary
+command creates `experiment_summary.csv`, `README.md`, and a cross-experiment
+figure without combining incompatible metrics into a synthetic ranking.
+
+## Technical Design
 
 ### Joint overlap and outlier sensitivity
 
@@ -95,7 +175,7 @@ The working hypothesis is that larger voxels reduce local density and storage
 requirements at the cost of increasing the distance between the original
 points and their nearest retained representation.
 
-## Features
+## Experiment and Interface Coverage
 
 - Stable 1.x compatibility contract for public Python and CLI interfaces
 - Wheel build and installation verification across Python 3.10 through 3.14
@@ -141,29 +221,6 @@ points and their nearest retained representation.
 - CSV metrics, filtered XYZ files, and static comparison plots
 - A versioned public-data sample with source checksum and preparation metadata
 - CLI workflows and focused unit tests
-
-## Quick Start
-
-Use Python 3.10 or later in an isolated environment.
-
-```bash
-git clone https://github.com/cab0a/pointcloud-playground.git
-cd pointcloud-playground
-python -m pip install -e .
-
-pointcloud-playground --version
-pointcloud-playground generate-demo demo.xyz
-pointcloud-playground evaluate-joint-sensitivity demo.xyz \
-  --output-dir output/joint_sensitivity
-```
-
-The sensitivity evaluation writes:
-
-```text
-output/joint_sensitivity/
-├── comparison.png
-└── metrics.csv
-```
 
 ## Usage
 
@@ -328,7 +385,7 @@ The full public-name list, data contract, examples, units, errors, and 1.x
 compatibility policy are documented in
 [`docs/api.md`](docs/api.md).
 
-### Reproducibility contract
+## Reproducibility
 
 The reference runner reads versioned inputs and accepts `--output-root`, so an
 independent run does not overwrite committed evidence. The verification script
@@ -337,7 +394,7 @@ reports, the generated Markdown summary, and the structure and dimensions of
 every figure. Exact commands, comparison tolerances, and determinism boundaries
 are documented in [`docs/reproducibility.md`](docs/reproducibility.md).
 
-## Methodology
+## Evaluation Methodology
 
 ### Cross-experiment summary
 
@@ -592,7 +649,7 @@ occupied voxel is represented by the centroid of its points.
 
 All coordinates and distances use the units of the input XYZ file.
 
-## Evaluation
+## Results
 
 ### v1.0 stable-release review
 
@@ -669,8 +726,6 @@ overlap condition, while the 40% policy also recovers every 60% condition.
 
 Within each overlap cell, the symbols follow 0%, 2%, 5%, and 10% requested
 outlier fractions from left to right.
-
-![Joint sensitivity on the synthetic surface](results/joint_sensitivity/synthetic/comparison.png)
 
 At 40% overlap, the effective valid-pair fraction falls from 40.0% without
 outliers to 39.2%, 38.0%, and 36.0% as contamination increases. A fixed 40%
@@ -1092,6 +1147,32 @@ pointcloud-playground/
 - Stable interfaces preserve compatibility, but controlled experimental
   conclusions remain bounded by the documented inputs, parameters, and metrics.
 
+## Development and Testing
+
+Install the development extras and run the complete suite:
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest
+python -m build
+```
+
+Tests cover XYZ I/O, deterministic generation, downsampling, normal
+estimation, outlier injection and filtering, registration, overlap and trim
+evaluation, summaries, public API behavior, CLI output, and reproducibility.
+GitHub Actions runs the suite, builds distributions, installs the wheel, and
+checks the installed CLI on Python 3.10 through 3.14.
+
+## Compatibility
+
+Python 3.10 through 3.14 are exercised in CI. Version 1.x keeps the documented
+top-level Python API, existing CLI commands and aliases, primary output
+filenames, and existing CSV columns compatible. New optional fields or commands
+may be added without changing the meaning of existing interfaces. Exact data,
+error, and deprecation boundaries are documented in
+[`docs/api.md`](docs/api.md); the release process is documented in
+[`docs/release-checklist.md`](docs/release-checklist.md).
+
 ## Roadmap
 
 - **v0.9:** Completed — documentation, API, and reproducibility review
@@ -1115,3 +1196,15 @@ The source code is available under the [MIT License](LICENSE).
 The included USGS 3DEP-derived sample is public domain. Its source and
 preparation details are documented in
 [`data/usgs_3dep_iowa/README.md`](data/usgs_3dep_iowa/README.md).
+
+---
+
+## 日本語概要
+
+このリポジトリは、点群のdownsampling、outlier filtering、normal estimation、
+rigid registrationを、既知の変換・対応点・ラベルを使って定量評価する実験基盤です。
+3D処理手法の挙動や失敗条件を確認したいR&Dエンジニアに役立ちます。
+
+決定論的なsynthetic dataとUSGS 3DEP由来サンプル、CLI、CSV metrics、比較図、
+再生成検証、Python 3.10〜3.14のCIを含みます。主張できる範囲と制約の詳細は
+英語本文を参照してください。
