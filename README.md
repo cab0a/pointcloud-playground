@@ -2,14 +2,9 @@
 
 ## 日本語概要
 
-点群のdownsampling、outlier filtering、normal estimation、rigid
-registrationを、既知の形状・変換・対応点・ラベルで定量評価する実験基盤です。
-点群アルゴリズムの挙動、精度、失敗条件を確認したいR&Dエンジニアやレビュー担当者に
-役立ちます。
+点群のdownsampling、outlier filtering、normal estimation、rigid registrationを、既知の形状・変換・対応点・ラベルで定量評価する実験基盤です。点群アルゴリズムの挙動、精度、失敗条件を確認したいR&Dエンジニアやレビュー担当者に役立ちます。
 
-7つのCLI実験、決定論的なsynthetic data、USGS 3DEP由来サンプル、CSV metrics、
-比較図、再生成検証、Python 3.10〜3.14のCIを含みます。評価条件、結果、主張できる
-範囲、制約の詳細は英語本文とリンク先の技術資料を参照してください。
+7つのCLI実験、決定論的なsynthetic data、USGS 3DEP由来サンプル、CSV metrics、比較図、再生成検証、Python 3.10〜3.14のCIを含みます。評価条件、結果、主張できる範囲、制約の詳細は英語本文とリンク先の技術資料を参照してください。
 
 ---
 
