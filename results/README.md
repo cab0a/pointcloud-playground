@@ -68,6 +68,7 @@ The `joint_sensitivity` directories contain:
 - `comparison.png`: recovery and exact-pair precision heatmaps for all-pairs,
   70% trimmed, and 40% trimmed ICP
 
-Interpretation is documented in the main project README. The numeric and
+Interpretation is documented in
+[`docs/evaluation-results.md`](../docs/evaluation-results.md). The numeric and
 structural comparison policy is documented in
 [`docs/reproducibility.md`](../docs/reproducibility.md).
