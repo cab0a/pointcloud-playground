@@ -8,6 +8,8 @@
 
 ---
 
+## English Summary
+
 All notable project changes are documented in this file. The project follows
 [Semantic Versioning](https://semver.org/) from version 1.0.0 onward.
 

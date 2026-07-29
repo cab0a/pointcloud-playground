@@ -8,6 +8,8 @@
 
 ---
 
+## English Summary
+
 This checklist defines the review used for stable public releases. It keeps
 release work focused on evidence quality, compatibility, and reproducibility
 rather than adding unreviewed features at the end of a release cycle.

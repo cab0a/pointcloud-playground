@@ -8,6 +8,8 @@
 
 ---
 
+## English Summary
+
 This document preserves the complete experiment questions, controlled
 protocols, metric definitions, results, and interpretation behind the concise
 project overview in the [README](../README.md). The sections report evidence

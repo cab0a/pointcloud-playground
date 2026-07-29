@@ -8,6 +8,12 @@
 
 ---
 
+## English Summary
+
+This reference defines the stable 1.x top-level Python API for point-cloud I/O,
+deterministic data generation, core processing, and rigid registration. It
+also separates supported imports from experiment-specific research workflows.
+
 ## Scope
 
 Version 1.0 defines a stable top-level API for point-cloud I/O, deterministic

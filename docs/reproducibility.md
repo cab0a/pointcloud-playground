@@ -8,6 +8,12 @@
 
 ---
 
+## English Summary
+
+This guide defines how to recreate the committed point-cloud evidence from
+versioned inputs, fixed parameters, deterministic seeds, CSV metrics, and
+diagnostic figures without overwriting the reference results.
+
 ## Reproduction contract
 
 The committed evidence is based on two versioned inputs, fixed experiment
