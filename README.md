@@ -17,10 +17,10 @@ conditions, and reviewable CSV and image artifacts.
 
 ## Overview
 
-Point Cloud Playground is a controlled evaluation suite for R&D engineers and
-reviewers who need to distinguish a plausible-looking point cloud from a
-measurably correct result. It tests geometric methods under changes in density,
-noise, initial transform, scan overlap, and source contamination.
+Point Cloud Playground is a controlled evaluation suite for distinguishing a
+plausible-looking point cloud from a measurably correct result. It tests
+geometric methods under changes in density, noise, initial transform, scan
+overlap, and source contamination.
 
 The deterministic synthetic surface provides analytic normals, exact generating
 pairs, known transforms, overlap membership, and injected-outlier labels. A
