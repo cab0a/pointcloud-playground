@@ -10,8 +10,6 @@ Python 3.10〜3.14でテストを自動実行しています。評価条件、�
 
 ---
 
-[![CI](https://github.com/cab0a/pointcloud-playground/actions/workflows/ci.yml/badge.svg)](https://github.com/cab0a/pointcloud-playground/actions/workflows/ci.yml)
-
 Evaluate point-cloud algorithms with known geometry, controlled failure
 conditions, and reviewable CSV and image artifacts.
 
