@@ -1,5 +1,13 @@
 # Experiment Design and Evaluation Results
 
+## 日本語概要
+
+本書は、点群の間引き、外れ値除去、法線推定、剛体位置合わせ、部分重なり、対応点の選別率、重なり率と外れ値率の同時感度を扱う7種類の統制実験を記録します。合成点群と公開点群について、条件、指標、結果、解釈可能な範囲を対応付けています。
+
+実験設計、数値表、評価指標、結果の詳細は以下の英語本文を参照してください。
+
+---
+
 This document preserves the complete experiment questions, controlled
 protocols, metric definitions, results, and interpretation behind the concise
 project overview in the [README](../README.md). The sections report evidence

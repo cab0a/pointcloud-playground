@@ -1,5 +1,13 @@
 # USGS 3DEP Iowa Sample
 
+## 日本語概要
+
+このディレクトリには、公開されているUSGS 3DEPの点群タイルから決定論的に抽出した5,000点の標本があります。取得元、元データと標本のSHA-256、乱数種、抽出条件、座標変換を`manifest.csv`へ記録しています。
+
+由来と再作成手順の詳細は以下の英語本文を参照してください。
+
+---
+
 This directory contains a deterministic 5,000-point subset derived from a
 public USGS 3D Elevation Program (3DEP) lidar tile.
 

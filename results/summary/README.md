@@ -1,5 +1,13 @@
 # Cross-Experiment Summary
 
+## 日本語概要
+
+本書は、7種類の点群実験と2種類のデータについて、代表条件、主要指標、補助指標、根拠となるCSVを一つの表へ集約します。選択規則は確認用の固定規則であり、異なる実験の指標を順位付けや総合点へ変換しません。
+
+選択規則と証拠範囲の詳細は以下の英語本文を参照してください。
+
+---
+
 This file condenses the committed reference results into one review view.
 Selected conditions follow explicit rules for scanning and are not universal
 recommendations. Metrics from different methods answer different questions

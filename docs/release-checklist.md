@@ -1,5 +1,13 @@
 # Public Release Checklist
 
+## 日本語概要
+
+本書は、公開リリース前に、実験根拠、入力の由来、機密情報の不在、公開インターフェース、再現性、配布物、文書を確認するためのチェックリストです。未検証の機能追加ではなく、既存の証拠と互換性の確認に焦点を当てています。
+
+確認項目と実行コマンドは以下の英語本文を参照してください。
+
+---
+
 This checklist defines the review used for stable public releases. It keeps
 release work focused on evidence quality, compatibility, and reproducibility
 rather than adding unreviewed features at the end of a release cycle.

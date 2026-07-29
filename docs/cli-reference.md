@@ -1,5 +1,13 @@
 # CLI and Output Reference
 
+## 日本語概要
+
+本書は、点群生成、各評価実験、結果集約、成果物検証に使用するコマンドラインと出力契約をまとめています。各コマンドの引数、主要ファイル名、CSV列、終了コードを確認できます。
+
+完全なコマンド例と成果物仕様は以下の英語本文を参照してください。
+
+---
+
 This document lists the complete command set and output contract. Start with
 the minimal workflow in the [README](../README.md), then use the commands below
 to reproduce or extend a specific experiment.

@@ -1,5 +1,13 @@
 # Limitations and Claim Boundaries
 
+## 日本語概要
+
+本書は、点群実験の結果から主張できる範囲を定義します。選択条件が実運用の推奨値ではないこと、異なる手法の指標を単一順位へ統合できないこと、合成条件や固定した初期値が実環境を網羅しないことを明記しています。
+
+実験ごとの制約と適用境界は以下の英語本文を参照してください。
+
+---
+
 This document records the detailed conditions that bound the conclusions in
 the [README](../README.md) and
 [evaluation results](evaluation-results.md). These constraints are part of the

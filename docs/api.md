@@ -1,5 +1,13 @@
 # Python API
 
+## 日本語概要
+
+本書は、点群の入出力、決定論的なデータ生成、主要処理、剛体位置合わせに関する1.xの公開Python APIを定義します。安定性を保証する名前・引数・戻り値と、保証対象外の実験用モジュールを区別しています。
+
+公開範囲、使用例、例外、単位の詳細は以下の英語本文を参照してください。
+
+---
+
 ## Scope
 
 Version 1.0 defines a stable top-level API for point-cloud I/O, deterministic

@@ -1,5 +1,13 @@
 # Reproducibility
 
+## 日本語概要
+
+本書は、固定入力、実験条件、乱数種、CSV、比較図から参照結果を再現する手順を定義します。別の出力先への一括再生成、コミット済み成果物との照合、入力チェックサム、決定論の対象範囲を記録しています。
+
+環境構築、検証方法、再現性の境界は以下の英語本文を参照してください。
+
+---
+
 ## Reproduction contract
 
 The committed evidence is based on two versioned inputs, fixed experiment

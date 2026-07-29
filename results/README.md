@@ -1,5 +1,13 @@
 # Reference Results
 
+## 日本語概要
+
+このディレクトリには、固定入力と固定条件から生成した点群実験の参照成果物があります。実験別・データ別の`metrics.csv`と`comparison.png`、横断集約、再生成コマンド、参照値との照合方法をまとめています。
+
+成果物の構成と検証手順は以下の英語本文を参照してください。
+
+---
+
 The results in this directory are generated from versioned inputs and fixed
 parameters. Regenerate all experiments into a separate directory with:
 

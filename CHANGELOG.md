@@ -1,5 +1,13 @@
 # Changelog
 
+## 日本語概要
+
+本ファイルは、各リリースで追加・変更した実験、公開API、コマンドライン、成果物、互換性、および検証内容を記録します。数値結果や科学的結論を変更していないリリースでは、その境界も明記しています。
+
+各版の変更内容は以下の英語本文を参照してください。
+
+---
+
 All notable project changes are documented in this file. The project follows
 [Semantic Versioning](https://semver.org/) from version 1.0.0 onward.
 
