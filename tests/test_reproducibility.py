@@ -79,6 +79,40 @@ def test_csv_comparison_allows_near_zero_rotation_error_differences(
         )
 
 
+def test_csv_comparison_allows_near_zero_translation_error_differences(
+    tmp_path: Path,
+) -> None:
+    reference = tmp_path / "reference.csv"
+    generated = tmp_path / "generated.csv"
+    reference.write_text(
+        "case,translation_error\na,2.4442826638183156e-12\n",
+        encoding="utf-8",
+    )
+    generated.write_text(
+        "case,translation_error\na,4.545564912517566e-13\n",
+        encoding="utf-8",
+    )
+
+    _compare_csv_files(
+        reference,
+        generated,
+        relative_tolerance=1e-9,
+        absolute_tolerance=1e-12,
+    )
+
+    generated.write_text(
+        "case,translation_error\na,1e-8\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(VerificationError, match="translation_error"):
+        _compare_csv_files(
+            reference,
+            generated,
+            relative_tolerance=1e-9,
+            absolute_tolerance=1e-12,
+        )
+
+
 def test_committed_comparison_figure_has_valid_png_dimensions() -> None:
     width, height = _png_dimensions(
         Path("results/joint_sensitivity/synthetic/comparison.png")

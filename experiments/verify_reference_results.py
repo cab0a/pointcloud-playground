@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 COLUMN_ABSOLUTE_TOLERANCES = {
     "rotation_error_deg": 5e-6,
+    "translation_error": 5e-12,
 }
 
 

@@ -64,12 +64,12 @@ The verifier performs the following checks:
 6. Confirms the figure inventory, PNG validity, and image dimensions.
 
 Default numeric comparison tolerances are `1e-9` relative and `1e-12`
-absolute. `rotation_error_deg` additionally uses a `5e-6` degree absolute
-tolerance near zero. This covers the observed variation in inverse-cosine
-rotation recovery across supported NumPy and SciPy environments without
-relaxing the comparison of other metrics. The general tolerances can be
-changed explicitly when diagnosing platform-dependent floating-point
-differences:
+absolute. Near zero, `rotation_error_deg` uses a `5e-6` degree absolute
+tolerance and `translation_error` uses `5e-12` coordinate units. These bounds
+cover the observed variation in inverse-cosine rotation recovery and linear
+algebra across supported NumPy and SciPy environments without relaxing the
+comparison of other metrics. The general tolerances can be changed explicitly
+when diagnosing platform-dependent floating-point differences:
 
 ```bash
 python experiments/verify_reference_results.py \
