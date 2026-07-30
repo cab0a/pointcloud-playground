@@ -32,6 +32,18 @@ jobs:
       - name: Run tests
         run: python -m pytest
 
+      - name: Run README Quick Start
+        if: matrix.python-version == '3.12'
+        run: |
+          quick_start_root="$(mktemp -d)"
+          cd "${quick_start_root}"
+          pointcloud-playground generate-demo demo.xyz
+          pointcloud-playground evaluate-joint-sensitivity demo.xyz \
+            --output-dir output/joint_sensitivity
+          test -s demo.xyz
+          test -s output/joint_sensitivity/metrics.csv
+          test -s output/joint_sensitivity/comparison.png
+
       - name: Build distribution
         run: python -m build
 

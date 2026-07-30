@@ -246,7 +246,9 @@ Tests cover XYZ I/O, deterministic generation, downsampling, normal estimation,
 outlier injection and filtering, registration, overlap and trim evaluation,
 summaries, public API behavior, CLI output, and reproducibility. GitHub Actions
 runs the suite, builds distributions, installs the wheel, and checks the
-installed CLI on Python 3.10 through 3.14.
+installed CLI on Python 3.10 through 3.14. On Python 3.12, it also runs the
+README Quick Start and requires the generated XYZ input, metrics CSV, and
+comparison image to be non-empty.
 
 ## Compatibility
 
