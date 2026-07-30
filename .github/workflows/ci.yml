@@ -44,6 +44,13 @@ jobs:
           test -s output/joint_sensitivity/metrics.csv
           test -s output/joint_sensitivity/comparison.png
 
+      - name: Verify regenerated reference artifacts
+        if: matrix.python-version == '3.12'
+        run: |
+          python experiments/run_reference_experiments.py --output-root results
+          git diff --exit-code -- results/
+          test -z "$(git status --porcelain --untracked-files=all -- results/)"
+
       - name: Build distribution
         run: python -m build
 

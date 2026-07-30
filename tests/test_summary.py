@@ -81,7 +81,10 @@ def test_summary_outputs_share_the_same_records(tmp_path: Path) -> None:
         rows = list(csv.DictReader(stream))
     assert len(rows) == len(summaries)
     assert rows[0]["experiment"] == "voxel_downsampling"
-    assert "Interface Review" in markdown_path.read_text(encoding="utf-8")
+    markdown = markdown_path.read_text(encoding="utf-8")
+    assert markdown.startswith("# Cross-Experiment Summary\n\n## 日本語概要\n")
+    assert "以下の英語本文を参照してください。\n\n---\n" in markdown
+    assert "Interface Review" in markdown
     assert plot_path.stat().st_size > 0
 
 

@@ -6,7 +6,7 @@
 
 コマンドラインから実行できる7つの実験、入力が同じなら同じ結果を生成する合成データ、USGS 3DEP由来の公開サンプル、CSV形式の評価結果、比較図、再生成検証を含みます。
 
-Python 3.10〜3.14でテストを自動実行しています。評価条件、結果、主張できる範囲、制約の詳細は、以下の英語本文とリンク先の技術資料を参照してください。
+Python 3.10〜3.14でテストを自動実行し、Python 3.12では参照用のCSV・比較図・要約を再生成してコミット済み成果物との差分を検査しています。評価条件、結果、主張できる範囲、制約の詳細は、以下の英語本文とリンク先の技術資料を参照してください。
 
 ---
 
@@ -248,7 +248,9 @@ summaries, public API behavior, CLI output, and reproducibility. GitHub Actions
 runs the suite, builds distributions, installs the wheel, and checks the
 installed CLI on Python 3.10 through 3.14. On Python 3.12, it also runs the
 README Quick Start and requires the generated XYZ input, metrics CSV, and
-comparison image to be non-empty.
+comparison image to be non-empty. The same job regenerates the committed CSV,
+Markdown, and PNG reference set and requires an empty Git diff with no
+untracked result artifacts.
 
 ## Compatibility
 
