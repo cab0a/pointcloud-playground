@@ -24,6 +24,9 @@ except ImportError:  # Direct execution from the repository root.
 
 ROOT = Path(__file__).resolve().parents[1]
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+COLUMN_ABSOLUTE_TOLERANCES = {
+    "rotation_error_deg": 5e-6,
+}
 
 
 class VerificationError(RuntimeError):
@@ -101,15 +104,21 @@ def _compare_csv_files(
             zip(reference_row, generated_row, strict=True),
             start=1,
         ):
+            column_name = reference_rows[0][column_index - 1]
+            effective_absolute_tolerance = max(
+                absolute_tolerance,
+                COLUMN_ABSOLUTE_TOLERANCES.get(column_name, 0.0),
+            )
             if not _values_match(
                 reference,
                 generated,
                 relative_tolerance=relative_tolerance,
-                absolute_tolerance=absolute_tolerance,
+                absolute_tolerance=effective_absolute_tolerance,
             ):
                 raise VerificationError(
                     f"Value differs in {reference_path.name}, row {row_index}, "
-                    f"column {column_index}: {reference!r} != {generated!r}"
+                    f"column {column_index} ({column_name}): "
+                    f"{reference!r} != {generated!r}"
                 )
 
 

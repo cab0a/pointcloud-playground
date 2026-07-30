@@ -2,7 +2,7 @@
 
 ## 日本語概要
 
-本書は、固定入力、実験条件、乱数種、CSV、比較図から参照結果を再現する手順を定義します。別の出力先への一括再生成、コミット済み成果物との照合、入力チェックサム、決定論の対象範囲を記録しています。
+本書は、固定入力、実験条件、乱数種、CSV、比較図から参照結果を再現する手順を定義します。別の出力先への一括再生成、コミット済み成果物との照合、数値計算と画像描画の環境差を考慮した検証境界、入力チェックサム、決定論の対象範囲を記録しています。
 
 環境構築、検証方法、再現性の境界は以下の英語本文を参照してください。
 
@@ -64,8 +64,12 @@ The verifier performs the following checks:
 6. Confirms the figure inventory, PNG validity, and image dimensions.
 
 Default numeric comparison tolerances are `1e-9` relative and `1e-12`
-absolute. They can be changed explicitly when diagnosing platform-dependent
-floating-point differences:
+absolute. `rotation_error_deg` additionally uses a `5e-6` degree absolute
+tolerance near zero. This covers the observed variation in inverse-cosine
+rotation recovery across supported NumPy and SciPy environments without
+relaxing the comparison of other metrics. The general tolerances can be
+changed explicitly when diagnosing platform-dependent floating-point
+differences:
 
 ```bash
 python experiments/verify_reference_results.py \
